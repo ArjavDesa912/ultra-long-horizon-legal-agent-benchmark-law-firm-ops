@@ -1,0 +1,99 @@
+{
+  "task_id": "019_billing_disruption_window_detection",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: billing_disruption row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.1
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: billing_disruption row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.3
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: billing_disruption row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.3
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 17 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.9
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 13.9
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.2
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 20 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.3
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.4
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 11 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 13.1
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 10.9
+    }
+  },
+  "reset_seconds": 82.0,
+  "nonce": "EP-013F659A",
+  "measured_gold_steps": 17,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

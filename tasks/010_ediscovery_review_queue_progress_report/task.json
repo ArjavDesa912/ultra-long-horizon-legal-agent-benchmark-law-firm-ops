@@ -1,0 +1,90 @@
+{
+  "task_id": "010_ediscovery_review_queue_progress_report",
+  "name": "law_firm_software_010_ediscovery_review_queue_progress_report",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "aggregation"
+  ],
+  "surface": "backend",
+  "instruction": "Build the e-discovery review-queue progress report for the matters the firm is actively holding or producing for, batched under the episode batch code (ops_meta). A matter is in scope when it has an active legal hold or a production that has been finalised or served. For every in-scope matter, report the review pipeline's progress per the firm's review-status vocabulary (REVIEW-STATUS-01 in firm_policies -- legacy tool exports may spell states differently; the policy's synonym map decides what counts as reviewed): one ops_reports row per in-scope matter (report='ediscovery_progress', batch_code) with the matter's document totals, reviewed share, privileged count, collected item totals, and backlog. Then, from the rows this batch produced, identify the review-starved matters -- the episode row's priority_queue_size lowest reviewed shares (ties broken by the firm's standard identifier order) -- and push one ops_reports row per rank (report='ediscovery_priority_queue', batch_code). No other 'ediscovery_progress' or 'ediscovery_priority_queue' rows for this batch may exist. Do not modify any source collection. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 178,
+  "par_steps": 118,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "priority_queue_size": {
+        "min": 3,
+        "max": 8
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "integration_fault",
+      "mechanism": "12 documents carry the legacy hyphenated review_status 'qc-complete' from the pre-migration review tool (snapshot-confirmed: 12); REVIEW-STATUS-01 normalizes it to qc_complete -- an agent counting raw values under-reports reviewed documents on those matters."
+    },
+    {
+      "category": "latent_organizational",
+      "mechanism": "the in-scope matter set is defined by hold/production activity, not by all matters with documents -- auditing every matter with documents over-reports the queue (snapshot-confirmed: matters outside the scope exist)."
+    },
+    {
+      "category": "decision_pressure",
+      "mechanism": "the priority-queue cut is an episode knob (3-8 matters); the bottom set moves every episode, so memorized rankings go stale."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One ediscovery_progress row per in-scope matter (document totals, reviewed share with policy normalization, collection backlog) plus a priority queue of the episode-row-sized bottom set derived from those rows; dual-path confirmed; legacy synonyms normalized per REVIEW-STATUS-01.",
+    "checks": [
+      {
+        "type": "dual_path",
+        "collection": "ediscovery_documents",
+        "expect": "per-matter document/reviewed counts agree between Python filter and SQL"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "progress rows for the scoped matter set + priority queue exact"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "retrieved_at": "2026-09-10",
+    "domain_searches": [
+      {
+        "query": "e-discovery review rate metrics documents per hour progress reporting",
+        "top_results": [
+          "EDRM review workflow metrics (edrm.net)",
+          "Document review productivity metrics (relativity.com)",
+          "Tar and review queue management (kroll.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "ediscovery review progress report benchmark task legacy status normalization agent",
+        "top_results": [
+          "EDRM model standards (edrm.net)",
+          "Review analytics (relativity.com)",
+          "Document review QC workflows (kroll.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "Scope discovery (active holds + served/finalised productions), a legacy-vocabulary normalization rule, and a velocity/bottom-N cut driven by an episode knob -- none of the rules are printed."
+  }
+}

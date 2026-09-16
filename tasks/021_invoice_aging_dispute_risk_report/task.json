@@ -1,0 +1,92 @@
+{
+  "task_id": "021_invoice_aging_dispute_risk_report",
+  "name": "law_firm_software_021_invoice_aging_dispute_risk_report",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "reporting"
+  ],
+  "surface": "backend",
+  "instruction": "Build the firm's AR aging and dispute-risk report for this episode, batched under the episode batch code (ops_meta, meta_key='episode_state'; the episode row also carries the episode date and the dispute_risk_threshold knob the risk flag is cut by). Apply the firm's open-AR definition in firm policy KPI-CLIENT-01 exactly as the live policy row states it \u2014 including how invoices in dispute interact with the aging (they are aged like any other open invoice AND separately risk-flagged when their unpaid balance clears the episode row's threshold). Age the open invoices the way the policy and standard practice prescribe and push one ops_reports row per non-empty bucket (report='ar_aging', batch_code) carrying the bucket, its invoice count and its unpaid total; push one ops_reports row per risk-flagged invoice (report='dispute_risk', batch_code) identifying the invoice and its unpaid balance. STAGE 2 \u2014 firm policy SEVERITY-01 requires a report that summarizes another to reuse the summarized rows' values rather than recompute them: from the bucket rows, push exactly one ops_reports row (report='ar_concentration', batch_code) carrying the share of open AR sitting past 90 days. STAGE 3 \u2014 the firm's close calendar also defines six standard month-end close dates relative to the episode month (the six calendar month-ends immediately preceding it); reconstruct the aging as of each of those close dates on the same open-invoice basis the policy defines, counting only invoices that had been issued by that date, and push one ops_reports row per non-empty bucket per close date (report='ar_aging_history', batch_code). No other ops_reports rows for these reports and this batch may exist. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 670,
+  "par_steps": 446,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "dispute_risk_threshold": {
+        "min": 2000,
+        "max": 8000
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "decoy_boundary",
+      "mechanism": "The disputed-in-aging interaction: disputed invoices are part of open AR under policy KPI-CLIENT-01, so they age inside their due-date bucket AND get risk-flagged when their unpaid balance exceeds the episode threshold. Excluding them from the aging shifts ~449 invoices' balances across buckets (snapshot-confirmed: 449 disputed invoices with positive unpaid balance); flagging the ones under the threshold over-reports the risk set (snapshot unpaid balances run ~536-14,995, so the 2000-8000 knob moves the flag set between 403/312/212)."
+    },
+    {
+      "category": "decoy_boundary",
+      "mechanism": "The 'current' bucket legitimately includes open invoices not yet past due at the episode date (snapshot: 107), and the 90+ concentration must be dollar-weighted (unpaid totals, not invoice counts) \u2014 a count-based concentration is plausible and wrong."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Every aging bucket's count and unpaid total independently confirmed via raw-row bucketing AND a SQL date-arithmetic GROUP BY, agreeing with each other and with the written rows; every dispute_risk row matches a real disputed invoice above the episode threshold and none below it; the concentration percentage derived by read-back from the bucket rows; the six month-end reconstructions exact including interior-month exclusion.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one ar_aging row per non-empty bucket, one dispute_risk row per qualifying invoice, one ar_concentration row, ar_aging_history rows per non-empty bucket per close date"
+      },
+      {
+        "type": "dual_path",
+        "collection": "invoices",
+        "expect": "bucket membership and totals agree between Python bucketing and SQL date arithmetic"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "excluding disputed invoices from the aging, flagging sub-threshold disputes, or computing concentration from counts => FAIL"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "AR aging dispute risk high value disputed invoice flagging best practice",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Invoice Dispute Resolution Workflows (arautomatic.com)",
+          "Managing Aging Invoices With AR Automation (zuora.com)",
+          "Stack guide: Flag disputed invoices before they stall collections (us.fitgap.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "invoice aging buckets month-end reconstruction dispute risk threshold benchmark task law firm",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Accounts Receivable Dispute Resolution: A Practical Guide for Finance Teams (lunos.ai)",
+          "Dispute Management in AR: Recover 40-60% of Short-Pays (singoa.com)",
+          "Accounts Receivable Aging for Law Firms (lawpay.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "Fuses standard AR aging bucketing, a policy-defined disputed-in-aging interaction, an episode-knob dispute-risk flag, and a six-month-end point-in-time reconstruction in one mission at 3000-invoice scale \u2014 distinct from 015's client-centric rollup (which carries the quarter-end variant) and 019's aggregate-only disruption buckets."
+  },
+  "horizon_tier": 2
+}

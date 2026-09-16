@@ -1,0 +1,99 @@
+{
+  "task_id": "003_hold_linkage_repair_and_ack_sweep",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: collection 1 hold_id: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.4
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: collection 1 hold_id: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.5
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: collection 1 hold_id: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.5
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 251 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 3.5
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 7.7
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.8
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 409 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.9
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.3
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 251 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.7
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 7.2
+    }
+  },
+  "reset_seconds": 25.3,
+  "nonce": "EP-1EFE189B",
+  "measured_gold_steps": 251,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

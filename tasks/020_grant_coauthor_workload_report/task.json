@@ -1,0 +1,97 @@
+{
+  "task_id": "020_grant_coauthor_workload_report",
+  "name": "law_firm_software_020_grant_coauthor_workload_report",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "reporting"
+  ],
+  "surface": "backend",
+  "instruction": "Build the firm's grant-writing workload report for this episode, batched under the episode batch code (ops_meta, meta_key='episode_state'; the episode row also carries the episode date and the workload_share_cutoff knob that decides who gets a capacity alert). The firm's fee-earner roster lives in the staff_roster collection \u2014 read it live and apply its active-at-episode-date rule; do not rely on any prose roster or on the names that happen to appear in the application data. For every active roster employee, push one ops_reports row (report='grant_workload', batch_code) carrying their grant involvements in each role (an application counts once per role a person holds on it \u2014 leading a application and co-authoring it are two involvements), their total logged hours, and their share of the firm's total grant involvements. STAGE 2 \u2014 firm policy SEVERITY-01 requires a report that summarizes another to reuse the summarized rows' values rather than recompute them: rank the workload rows by share and push one ops_reports row per rank (report='grant_workload_ranking', batch_code) carrying the rank, the employee's identity and their share. STAGE 3 \u2014 for every employee whose share exceeds the episode row's workload_share_cutoff, open a capacity-review task (tasks collection) assigned to the firm's supervising partner as identified from the roster. No other ops_reports rows for these reports and this batch, and no other tasks rows, may exist. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 118,
+  "par_steps": 78,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "workload_share_cutoff": {
+        "min": 30,
+        "max": 40
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports",
+    "tasks"
+  ],
+  "hazards": [
+    {
+      "category": "lapse",
+      "mechanism": "Departed-employee volume: EMP-006 (Dana Counsel) left the firm (staff_roster.active_to in the past) but still leads 3 grant applications (snapshot-confirmed: 3). A roster taken from prose or from the application data includes EMP-006 and produces 6 workload rows with wrong shares; the live roster has 5 active employees and EMP-006 must be absent from every report row."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "The role double-count rule: application APP-2026-010 lists EMP-001 as lead author AND in its co_authors array, so that single application contributes two involvements (one per role) to EMP-001's counts and to the firm total (snapshot total: 599 involvements across the 5 active employees). Deduplicating roles per application yields a plausible total of 598 and shifts every share."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "co_authors is a JSON array requiring membership testing, not equality: counting applications via equality (or counting an application once per employee while dropping the lead/co-author overlap) silently under-counts. The ranking's tie-break (equal shares ordered by employee id) is also enforced by the verifier."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Exactly one grant_workload row per active roster employee (5 in the snapshot), every count dual-path (Python array-membership filtering and SQL lead GROUP BY / jsonb co-author membership), share math exact including the double-counted application, EMP-006 absent everywhere, ranking ties per policy, and capacity-alert tasks written to the roster-derived supervising partner for the above-cutoff slice.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one grant_workload row per active roster employee, one grant_workload_ranking row per employee, capacity-alert tasks for the above-cutoff slice"
+      },
+      {
+        "type": "dual_path",
+        "collection": "grant_applications",
+        "expect": "lead and co-author counts agree between Python array-membership filtering and SQL (GROUP BY lead_author; jsonb co-author membership)"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "including departed EMP-006, deduplicating an employee's lead+co-author roles on one application, or ranking by billable hours instead of share => FAIL"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "research administration grant workload distribution norms co-investigator effort allocation",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Policy on Effort on Sponsored Program Activities (policy.uconn.edu)",
+          "Allocation of Credit \u2014 Research Administration (scholar.uncg.edu)",
+          "2.1.6 Minimum Effort \u2014 Policy Library (s1.policylibrary.gatech.edu)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "grant writing team workload lead author coauthor share capacity alert benchmark task",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "PROCEDURE RA2060 LABOR DISTRIBUTION (guru.psu.edu)",
+          "Grant Writing Team Roles and Workload Distribution (grantstation.com)",
+          "College of Medicine \u2014 guidelines for sponsored project effort (med.uc.edu)"
+        ]
+      }
+    ],
+    "differentiation_note": "The only task in the suite combining a live-roster read (departed employee excluded, 3 near-miss applications led by them), array-membership counting with an explicit lead+co-author double-count case, a cross-collection hours figure, and capacity alerts that write back into tasks with a roster-derived assignee."
+  },
+  "horizon_tier": 2
+}

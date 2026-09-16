@@ -1,0 +1,107 @@
+{
+  "task_id": "005_docket_deadline_risk_task_seeding",
+  "name": "law_firm_software_005_docket_deadline_risk_task_seeding",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "workflow",
+    "idempotency"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's docket risk sweep, per firm policy DOCKET-01 (in firm_policies), batched under the episode batch code (ops_meta), as of the episode date. The policy defines which deadlines enter the docket-risk window (their status, their matter's state, and the episode row's docket_window_days), what preparation task each qualifying deadline must have -- including how an existing preparation task for the same deadline is handled and how urgency and the preparation lead time derive from the episode row's urgent_window_hours and prep_lead_days -- and which deadlines never get one. Then report the sweep: one ops_reports row per matter with qualifying deadlines under report='docket_risk_summary' counting its qualifying deadlines and how many are urgent, plus one firm-wide rollup row under the same report. No other ops_reports 'docket_risk_summary' rows for this batch may exist. Running the sweep again in the same episode must not duplicate preparation tasks. Do not modify any collection other than tasks, deadlines, and ops_reports. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 112,
+  "par_steps": 74,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "docket_window_days": {
+        "min": 7,
+        "max": 14
+      },
+      "urgent_window_hours": {
+        "min": 24,
+        "max": 72
+      },
+      "prep_lead_days": {
+        "min": 1,
+        "max": 3
+      }
+    }
+  },
+  "blast_radius": [
+    "tasks",
+    "deadlines",
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "mistake",
+      "mechanism": "stale prep task 'Prepare for: Claim Construction Hearing' (due_date already past while the deadline itself is still upcoming; planted: 1, snapshot-confirmed) must be UPDATED in place to the policy-derived due date and priority, never duplicated -- DOCKET-01 says an existing prep task for a qualifying deadline is UPDATED, and an agent that only checks title existence leaves the stale date in place."
+    },
+    {
+      "category": "slip",
+      "mechanism": "window/urgency/lead knobs (docket_window_days 7-14, urgent_window_hours 24-72, prep_lead_days 1-3) move the qualifying set and every derived due date/priority each episode; snapshot background: 885 upcoming deadlines on open matters, of which only the in-window slice qualifies."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "matter 2026-006 is suspended with 2 already-completed deadlines (planted, snapshot-confirmed) -- both the matter-status and deadline-status filters must independently exclude them."
+    }
+  ],
+  "success_criteria": {
+    "summary": "For every qualifying deadline (status upcoming, open matter, due within the episode row's docket_window_days of the episode date), exactly one preparation task exists with the policy-derived due date (deadline due date minus prep_lead_days) and priority (urgent when the deadline is due within urgent_window_hours, else high); the pre-existing stale prep task for 'Claim Construction Hearing' is UPDATED in place when its deadline qualifies, never duplicated; deadlines outside the window or on suspended/closed matters get nothing; re-running the sweep creates no duplicates. Per-matter and FIRM docket_risk_summary rows derive from the sweep. deadlines rows other than the updated prep task stay byte-identical.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "tasks",
+        "expect": "one prep task per qualifying deadline with policy-derived due_date/priority; no duplicates"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "deadlines",
+        "expect": "the stale prep row updated in place when qualifying; every other seeded deadline byte-identical"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "per-matter and FIRM summary rows derived from the sweep's qualifying set"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius, including matters"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "docketing lead-time practice",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Legal Malpractice and Missed Deadlines: ABA Standing Committee Report (americanbar.org)",
+          "Docketing Software Comparison for Law Firms (clio.com)",
+          "Calendar Rules and Deadline Management in Litigation (lawyerist.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "auto-generate preparation task upcoming deadline law firm case management benchmark idempotent",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Task Automation for Legal Deadlines (mycase.com)",
+          "Calendar-to-Task Workflow Automation in Practice Management Software (practicepanther.com)",
+          "Rules-Based Docketing Systems Explained (compulaw.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "A three-knob (episode-row) windowed idempotent create-or-update sweep: the stale-prep trap requires UPDATE-in-place semantics on a pre-existing row (not create-with-dedup, not create-only), the qualifying set moves with three episode knobs every episode, and the summary rows derive from the sweep's own qualifying set -- distinct from tasks 001-004's repair missions and the pure read-only reports."
+  }
+}

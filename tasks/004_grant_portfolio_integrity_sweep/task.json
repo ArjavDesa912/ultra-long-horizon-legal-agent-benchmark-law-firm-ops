@@ -1,0 +1,103 @@
+{
+  "task_id": "004_grant_portfolio_integrity_sweep",
+  "name": "law_firm_software_004_grant_portfolio_integrity_sweep",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "repair",
+    "workflow",
+    "aggregation"
+  ],
+  "surface": "backend",
+  "instruction": "Run the grant portfolio integrity sweep, applying the firm's grant reporting cadence policy GRANT-REPORT-01 (in firm_policies), batched under the episode batch code (ops_meta), as of the episode date. Two integrity classes need repair: a grant application's client must agree with the client of the matter it is linked to; and each award's reporting_schedule is authoritative against the live grant_reports tracking rows -- the policy decides what is missing, what has drifted, and what must never be touched (waived reports are not owed). Then report: one ops_reports integrity summary row under report='grant_portfolio_integrity' carrying the consistent-application count, the live report count, and the on-schedule count; one ops_reports row per award under report='reporting_compliance' with that award's report total and its overdue count as of the episode date; and a point-in-time reconstruction under report='grant_schedule_history' -- for each of the firm's four most recent past calendar quarter-ends, how many schedule entries were already due by that date and how many of those were unmet at the time (the policy defines what 'owed as of a date' means, and the reconstruction may only use what the cadence policy says a historical date can see). No other ops_reports rows for this batch_code under those three report names may exist. Do not modify grant_opportunities, grant_awards, or grant_expenses. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 574,
+  "par_steps": 382,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code"
+  },
+  "blast_radius": [
+    "grant_applications",
+    "grant_reports",
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "copy_paste_drift",
+      "mechanism": "grant_applications.client_id disagreeing with the linked matter's real client: 2 hand-authored (APP-2026-001/003) + 15 bulk planted (snapshot-confirmed total: 17); APP-2026-002 is already consistent and must stay unchanged."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "AWD-2026-001's progress report due_date drifted from its schedule entry (+5d vs +90d, snapshot-confirmed) and 40 bulk awards carry two-entry schedules with missing reports (snapshot-confirmed: 41 awards with multi-entry schedules) -- both the create and the correct paths are exercised."
+    },
+    {
+      "category": "normalization_of_deviance",
+      "mechanism": "8 bulk grant_reports carry status='waived' (planted, snapshot-confirmed: 8) -- GRANT-REPORT-01 forbids recreating or re-dating waived reports; touching any of them = FAIL."
+    },
+    {
+      "category": "latent_organizational",
+      "mechanism": "the stage-5 point-in-time reconstruction uses only schedule entries already due at each quarter-end -- an early error in the schedule reconciliation (stage 2) silently corrupts the historical unmet counts (far from the cause)."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Every grant_applications row whose matter resolves carries its matter's client_id (17 live-confirmed mismatches corrected, the rest untouched apart from that field). Every real award's reporting_schedule entry has exactly one live grant_reports row with the schedule's due_date; the 8 waived bulk reports stay byte-identical (never recreated or re-dated); created rows carry status upcoming. The integrity summary, per-award compliance rows, and the four point-in-time quarter-end rows are all re-derived from live end-state and confirmed two independent ways (raw-row filter and SQL GROUP BY) which must agree. grant_awards, grant_opportunities, and grant_expenses stay canary-identical.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "grant_applications",
+        "expect": "client_id matches the linked matter's client on every resolving application"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "grant_reports",
+        "expect": "every schedule entry covered exactly once with the schedule's due_date; waived rows byte-identical"
+      },
+      {
+        "type": "dual_path",
+        "collection": "grant_reports",
+        "expect": "schedule-coverage and matching counts agree between raw-row filter and SQL"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "point-in-time quarter-end values exact (only schedule entries due on/before each quarter-end count)"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius, including grant_awards"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "2 CFR 200.328 due dates",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "2 CFR 200.328 - Revision of budget and program plans (ecfr.gov)",
+          "2 CFR 200 Uniform Guidance Grant Reporting Requirements (grants.gov)",
+          "Grant Compliance Reporting Best Practices (councilofnonprofits.org)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "grant application client matter mismatch repair reporting schedule reconciliation benchmark task",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Grant Lifecycle Management Systems Overview (grantstation.com)",
+          "Conflict of Interest and Client Matching in Grant-Funded Legal Work (nlada.org)",
+          "Award Compliance Tracking Templates (fluxx.io)"
+        ]
+      }
+    ],
+    "differentiation_note": "Fuses a referential-integrity repair (application-to-matter client matching, 17 planted mismatches) with a schedule-vs-tracking-table reconciliation (create missing, correct drifted due_dates, never touch waived) and a point-in-time historical reconstruction whose counts silently corrupt if the reconciliation was wrong -- distinct from task 009's read-only grant dashboard and from every other repair task's mechanic."
+  }
+}

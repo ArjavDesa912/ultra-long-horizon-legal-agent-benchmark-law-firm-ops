@@ -1,0 +1,95 @@
+{
+  "task_id": "022_firmwide_kpi_pack",
+  "name": "law_firm_software_022_firmwide_kpi_pack",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "reporting"
+  ],
+  "surface": "backend",
+  "instruction": "Build the enterprise KPI pack firm leadership reviews each period, batched under the episode batch code (ops_meta). Every figure in the pack is defined by firm policy KPI-PACK-01; apply those definitions exactly, each field named as the policy names it. The pack spans every side of the practice (matters, work in progress, receivables, trust, holds, the review queue, the grant pipeline), and the policy is explicit that trust is a liability reported in its own right -- never folded into receivables or netted against work in progress. Push one ops_reports row (report='enterprise_kpi', batch_code) carrying every KPI the policy defines. STAGE 2 -- push the pack's ratios row (report='enterprise_kpi_ratios', batch_code) carrying the two ratios KPI-PACK-01 defines over the pack row's own values, applying the policy's rounding and zero-denominator rules; read the pack row back rather than recomputing it. STAGE 3 -- leadership alerts: each ratio has an episode-row threshold (ar_alert_ratio, trust_alert_ratio -- integer percentages). AR concentration breaches when it rises above its threshold; trust coverage breaches when it falls below its own. Push one ops_reports row per breached ratio (report='enterprise_kpi_alert', batch_code) recording which ratio breached, its value, its threshold, and the direction of the breach. STAGE 4 -- push one tie-out row (report='enterprise_kpi_tieout', batch_code) that re-reads this batch's alert rows and the ratios row and records: ratios_checked, alerts_raised, alert_values_consistent (true iff every alert row's value matches the ratios row's value for that ratio), tie_out_ok. Per firm policy SEVERITY-01, a report that summarizes another report must reuse the summarized rows' values -- recomputing them independently is a policy violation. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 140,
+  "par_steps": 93,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "ar_alert_ratio": {
+        "min": 25,
+        "max": 40
+      },
+      "trust_alert_ratio": {
+        "min": 85,
+        "max": 105
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "mistake",
+      "mechanism": "Trust-as-receivable confusion: total_trust_liability is a client LIABILITY that KPI-PACK-01 reports separately, and its snapshot magnitude (10,080,508) sits within ~4% of total_open_ar (10,458,031) -- an agent that folds trust into open AR (or nets it against WIP) produces a plausible pack whose AR is wrong by roughly the firm's entire trust position (planted definitional trap; KPI-CLIENT-01 states the rule the pack must follow)."
+    },
+    {
+      "category": "copy_paste_drift",
+      "mechanism": "Status-set drift across the seven collections: each KPI's status set is a near-miss of a neighbouring collection's vocabulary, and the seed carries real volume in every adjacent class (522 written_off invoices that are not open AR, 5971 written_off time_entries outside WIP, 12 legacy 'qc-complete' documents that REVIEW-STATUS-01 normalizes to qc_complete and therefore are not under review, 408 closed + 398 suspended matters). One borrowed predicate moves several KPIs at once, each to a plausible wrong value."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Exactly one enterprise_kpi row whose 7 fields each match an independently recomputed aggregate spanning a different collection (matters/time_entries/invoices/clients/ediscovery_holds/ediscovery_documents/grant_opportunities); one ratios row derived from that pack row; exactly the policy-breaching alert rows for the episode's thresholds; one tie-out row that re-reads the batch's own alert and ratio rows. Every derived number is dual-path confirmed (REST rows vs SQL) inside the verifier.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "exactly one enterprise_kpi row (7 policy-defined fields), one enterprise_kpi_ratios row, the exact breached-alert set, and one enterprise_kpi_tieout row consistent with the batch's own rows"
+      },
+      {
+        "type": "dual_path",
+        "collection": "all seven source collections",
+        "expect": "every KPI agrees between the raw-row filter and a SQL aggregate, and both agree with the pushed row"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "a solution that counts trust into AR, or drifts any KPI's status set, produces a wrong pack and FAILs"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius (governance collections always canaried)"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "Clio law firm KPI benchmarks utilization realization aging",
+        "top_results": [
+          "Law Firm KPIs | Key Performance Indicators & Benchmarks | Clio",
+          "62 Essential Law Firm KPIs and Performance Metrics for Attorneys (clio.com)",
+          "A Law Firm's Guide to Data-Driven Success (clio.com)"
+        ],
+        "retrieved_at": "2026-09-10"
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "enterprise KPI pack combining billing ediscovery grants trust one report benchmark task law firm",
+        "top_results": [
+          "Law Firm Leadership Dashboards and KPIs (intapp.com)",
+          "Cross-Module Legal Practice Analytics (intapp.com)",
+          "Firm-Wide Operational Dashboards (mycase.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "Still the widest-integration task in the suite (7 collections feeding one pack row, then a ratio row, alert rows, and a tie-out that re-reads the batch's own rows), but v2 moves every definition into firm policy KPI-PACK-01 and both alert thresholds into the episode row -- the instruction no longer prints a single status set, formula, or threshold, and the near-equal AR/trust magnitudes make the trust-as-liability trap plausible rather than obvious."
+  },
+  "horizon_tier": 2
+}

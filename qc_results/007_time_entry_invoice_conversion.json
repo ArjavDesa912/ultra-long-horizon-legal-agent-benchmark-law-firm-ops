@@ -1,0 +1,99 @@
+{
+  "task_id": "007_time_entry_invoice_conversion",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: top-N cut: raw vs SQL disagree (dual-path): mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.1
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: top-N cut: raw vs SQL disagree (dual-path): mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.5
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: top-N cut: raw vs SQL disagree (dual-path): mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.5
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 1987 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 12.7
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 8.5
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 5.5
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 3673 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 17.5
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 4.9
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 1886 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 10.1
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 8.6
+    }
+  },
+  "reset_seconds": 20.8,
+  "nonce": "EP-A65ABF24",
+  "measured_gold_steps": 1987,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

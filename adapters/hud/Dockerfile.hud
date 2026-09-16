@@ -1,0 +1,50 @@
+# HUD image: a thin layer over the unified law_firm_software container.
+#
+# Build (publish.ps1 does this for you, or `hud deploy` builds it directly):
+#   docker build -f Dockerfile.hud \
+#     --build-arg BASE_IMAGE=rl-env/law_firm_software:latest \
+#     -t rl-env/law_firm_software-hud:latest .
+#
+# The base already contains Postgres + the Stackhouse BaaS + the frontend + the
+# 100-task grading suite + the embedded env server; this layer only adds the
+# `hud` package and this environment's env.py/tasks.py, and serves HUD's
+# control channel on :8765.
+ARG BASE_IMAGE=rl-env/law_firm_software:latest
+FROM ${BASE_IMAGE}
+
+# bubblewrap backs hud's Environment.workspace() sandbox. Without it, hud
+# silently falls back to giving the agent's shell the REAL container
+# filesystem (no isolation at all) unless require_isolation=True is set on
+# the workspace call, in which case it refuses to serve instead. env.py sets
+# require_isolation=True, so this package is load-bearing: it is what keeps
+# the agent's shell from being able to `cat /app/env/grading/**/gold.py` and
+# read every task's exact answer key.
+RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN /app/.venv/bin/pip install --no-cache-dir "hud>=0.6.13,<0.7"
+
+COPY env_hud.py /hud/env.py
+COPY tasks_hud.py /hud/tasks.py
+
+WORKDIR /hud
+ENV HUD_ENV_DIR=/hud
+RUN mkdir -p /hud/workspace
+
+EXPOSE 8765
+
+# Scrub the BaaS/DB secrets from the environment the HUD server (and, through
+# it, the ssh sandbox the agent drives) inherits. Grading only needs the BaaS
+# HTTP API, whose credentials live in the baked task.json files.
+#
+# Two things this CMD must do that a naive "just run hud serve" misses:
+#   1. Start the app stack (Postgres + BaaS + frontend) in the background via
+#      the base image's existing start-stack-detached.sh -- HUD's runtime
+#      overrides the base image's CMD entirely, so the base ENTRYPOINT never
+#      runs and nothing else brings the stack up (env_hud.py's _reset_episode
+#      talks to the BaaS over HTTP and needs it running).
+#   2. Use a plain (non-login) shell. `sh -lc` sources /etc/profile, which on
+#      this Debian base resets PATH to the system default and drops
+#      /app/.venv/bin -- so `hud` can't be found and the container exits
+#      immediately, which is why the control channel on :8765 never opened.
+CMD ["sh", "-c", "/rl/start-stack-detached.sh >/var/log/stack-bootstrap.log 2>&1 & exec env -u STACKHOUSE_URL -u STACKHOUSE_DATA_ENCRYPTION_KEY -u STACKHOUSE_JWT_SECRET -u QDRANT_URL hud serve --host 0.0.0.0 --port 8765"]

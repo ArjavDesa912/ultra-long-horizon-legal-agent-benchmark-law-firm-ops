@@ -1,0 +1,99 @@
+{
+  "task_id": "025_billing_arrangement_compliance_audit",
+  "name": "law_firm_software_025_billing_arrangement_compliance_audit",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "audit"
+  ],
+  "surface": "backend",
+  "instruction": "Run the billing-arrangement compliance audit, batched under the episode batch code (ops_meta). Mutate nothing. The firm's billing-arrangement policy BILL-ARR-01 defines which invoice statuses each client billing arrangement permits, the disbursement-only exception, and the audit's scope: the top audit_top_clients (an episode-row value) contingency clients ranked by total non-draft billed value. Identify the scoped clients from live data, then audit their invoices against the policy. Push one ops_reports row per violating invoice (report='billing_arrangement_violation', batch_code) with {invoice_id, invoice_number, client_id, client_number, status, total, note}; the note must record the diagnosis -- which fee arrangement the invoice bypasses and why it therefore violates the policy. STAGE 2 -- per BILL-ARR-01: for every scoped client with at least one violation, push one exposure row (report='billing_arrangement_exposure', batch_code, client_id, client_number, violation_count, total_exposure); push one alert row (report='billing_arrangement_alert', batch_code, client_id, client_number, total_exposure, threshold) for every scoped client whose total exposure exceeds the episode row's exposure_alert_threshold; and push one summary row (report='billing_arrangement_summary', batch_code) with {clients_in_scope, clients_with_violations, violations_found, total_exposure}. The exposure and alert rows reuse the violation rows' values per firm policy SEVERITY-01. No other ops_reports rows for this batch under these report names may exist. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 389,
+  "par_steps": 259,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "audit_top_clients": {
+        "min": 20,
+        "max": 30
+      },
+      "exposure_alert_threshold": {
+        "min": 60000,
+        "max": 75000
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "scope_boundary",
+      "mechanism": "The audit's write set is bounded by the policy's ranked slice: the episode row's audit_top_clients (20-30) contingency clients ranked by total non-draft billed value. The seed carries 113 contingency clients and 557 non-draft invoices to them (snapshot-confirmed), so auditing ALL contingency clients -- ignoring the top-N cut -- over-reports the violation set several-fold and FAILs; the slice boundary is the planted scope hazard."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "Near-miss invoice shapes that BILL-ARR-01 explicitly permits: draft invoices to contingency clients (99 in the snapshot, snapshot-confirmed) are allowed; disbursement-only invoices (fees_total = 0 with only disbursements) are allowed for any arrangement; and fixed/hourly/retainer clients carry invoices shaped identically to the violating ones but are out of scope. Flagging any of these FAILs."
+    },
+    {
+      "category": "violation",
+      "mechanism": "The planted violations themselves: every non-draft, fee-bearing invoice issued to a scoped contingency client bypasses the firm's fee agreement (planted: 1 hand-authored, CLI-2026-002 / INV-2026-002, plus the bulk-scale population -- 167 violating invoices in the top-20 slice, 202 in top-25, 234 in top-30, snapshot-confirmed). The audit must diagnose each as a bypassed contingency fee agreement in the note field."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Exactly one violation row per non-draft, fee-bearing invoice issued to a scoped contingency client (the policy's ranked slice), each carrying a diagnosis naming the bypassed arrangement; one exposure row per scoped client with violations; one alert row per scoped client whose exposure exceeds the episode threshold; one summary row consistent with the violation rows. Dual-path (raw-row join vs SQL join) on every derived count. Near-miss invoices (drafts to contingency clients, disbursement-only invoices, identically-shaped invoices to non-contingency clients) stay unflagged.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one violation row per violating invoice in the scoped slice, one exposure row per violating client, the exact alert set above the episode threshold, one summary row"
+      },
+      {
+        "type": "dual_path",
+        "collection": "invoices x clients",
+        "expect": "violation count and per-client exposures agree between the raw-row join and the SQL join, and both agree with the pushed rows"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "flagging draft or disbursement-only invoices, ignoring the ranked slice, or auditing non-contingency clients produces a wrong set and FAILs; the diagnosis field is asserted"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius (governance collections always canaried)"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "ABA Model Rule 1.5 contingency fee agreement requirements written",
+        "top_results": [
+          "Rule 1.5: Fees (americanbar.org)",
+          "Rule 1.5 (ABA Ethics 2000 Commission revision)",
+          "Chapter 3: Contingency fees -- Louisiana State Bar Association practice aid"
+        ],
+        "retrieved_at": "2026-09-10"
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "contingency client billed hourly invoice compliance violation audit benchmark task law firm",
+        "top_results": [
+          "Fee Arrangement Tracking Software for Law Firms (clio.com)",
+          "Billing Compliance Audits by Fee Type (lawyerist.com)",
+          "Client Billing Preference Enforcement Tools (practicepanther.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "Still the only task in the suite cross-referencing a client's billing PREFERENCE against actual invoicing behavior, but v2 bounds the write set with the policy's ranked slice (top audit_top_clients contingency clients by non-draft billed value), moves the alert threshold into the episode row, and requires a per-invoice diagnosis naming the bypassed arrangement -- the arrangement matrix, the exception, and the scope are all policy/data-derived rather than narrated."
+  },
+  "horizon_tier": 2
+}

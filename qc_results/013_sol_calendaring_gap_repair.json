@@ -1,0 +1,99 @@
+{
+  "task_id": "013_sol_calendaring_gap_repair",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter 2026-001: expected exactly 1 statute deadline, found 0"
+      ],
+      "stderr_tail": [],
+      "seconds": 13.9
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter 2026-001: expected exactly 1 statute deadline, found 0"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.6
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter 2026-001: expected exactly 1 statute deadline, found 0"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.6
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 302 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 3.5
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 10.1
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.4
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 328 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.9
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.2
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 286 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 3.2
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 7.8
+    }
+  },
+  "reset_seconds": 87.0,
+  "nonce": "EP-BD1C7D07",
+  "measured_gold_steps": 302,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

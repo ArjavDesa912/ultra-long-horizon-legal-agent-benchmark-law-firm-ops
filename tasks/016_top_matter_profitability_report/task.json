@@ -1,0 +1,101 @@
+{
+  "task_id": "016_top_matter_profitability_report",
+  "name": "law_firm_software_016_top_matter_profitability_report",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "create"
+  ],
+  "surface": "backend",
+  "instruction": "Build the firm's matter profitability report for this episode, batched under the episode batch code (ops_meta, meta_key='episode_state'; the episode row also carries the episode date, the top_n knob that sizes the ranked list, and the realization_alert_threshold knob the alert stage is cut by). Apply the firm's realization basis exactly as firm policy KPI-REAL-01 defines it \u2014 read the live policy row before computing anything; the denominator it prescribes decides the whole ranking. Every matter in the matters collection is in scope for the ranking; matters whose billed value rests on no logged time cannot carry a realization figure and must be handled the way the firm's data-integrity convention requires (they are reported as their own anomaly class with the diagnosis category the firm's error taxonomy assigns to a wrong-rule applied-with-a-straight-face error). Land the results in ops_reports: exactly one report='matter_profitability' row per ranked matter carrying its rank and its logged / invoiced / collected / realization figures, one report='billing_anomaly' row per anomaly matter, and one report='profitability_alert' row per flagged matter. Where one report summarizes another, firm policy SEVERITY-01 requires reusing the summarized rows' values rather than recomputing. For every flagged matter, open a partner-review task assigned to the firm's supervising partner \u2014 who that is, and what else belongs on the task, comes from the live staff_roster and the firm's task conventions, not from this instruction. No other ops_reports rows for these reports and this batch, and no other tasks rows, may be created. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 482,
+  "par_steps": 321,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "top_n": {
+        "min": 15,
+        "max": 25
+      },
+      "realization_alert_threshold": {
+        "min": 40,
+        "max": 60
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports",
+    "tasks"
+  ],
+  "hazards": [
+    {
+      "category": "mistake",
+      "mechanism": "The realization denominator is defined by firm policy KPI-REAL-01 ('a share of all entries, by amount'): written_off entries count at their full amount. Excluding written_off entries (5,971 entries worth 10,881,050 in the snapshot) or valuing them at zero yields a plausible but wrong logged_value, a different top-N ranking and a different alert set."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "Matters billed with zero logged time (logged==0, invoiced>0) exercise the division guard and the anomaly class. Snapshot-confirmed count: 0 (the class is empty in this build \u2014 no bulk matter bills without logged time); the verifier recomputes the expected anomaly set from the snapshot, so an agent that hallucinates anomalies, or crashes on the guard, FAILs."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "The supervising partner is whoever staff_roster says is the only active partner (EMP-001; EMP-006 is departed with active_to in the past). Assigning review tasks from a prose roster or from app data instead of the roster mis-addresses every created task."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Exactly top_n matter_profitability rows ranked by the policy-defined logged_value (ties by lowest matter id), realization_pct exact on both the Python and SQL paths, billing_anomaly rows exactly the zero-logged-but-billed set, profitability_alert rows exactly the sub-threshold slice of the ranked rows read back from the agent's own stage-1 rows, and exactly one partner-review tasks row per alert assigned to the roster-derived supervising partner.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "matter_profitability rows for the top-N only, billing_anomaly rows for the anomaly set, profitability_alert rows for the sub-threshold slice"
+      },
+      {
+        "type": "dual_path",
+        "collection": "time_entries",
+        "expect": "per-matter logged_value agrees between Python aggregation and SQL GROUP BY, and with the written rows"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "denominator computed over a status subset (or at zero value) => wrong ranking/alerts => FAIL; alerts not derived from the written stage-1 rows => FAIL; tasks assigned to anyone but the roster-derived supervising partner => FAIL"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "law firm matter profitability realization rate benchmark",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Matter Profitability: Was the Case Worth It? (leanlaw.co)",
+          "Law Firm KPIs \u2014 Realization rate benchmarks (clio.com)",
+          "Law Firm Realization Rate: Benchmarks and How to Improve It (nstarfinance.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "top matters by logged value realization ranking partner review task benchmark law firm",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Top 10 Law Firm Revenue KPIs (pulserevops.com)",
+          "KPI Tracking for Law Firm Operations Management (ceoexecutiveassistant.com)",
+          "Matter Profitability Analysis Best Practices (lawyerist.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "The only task in this suite whose ranking metric is policy-defined (KPI-REAL-01's realization basis decides the denominator, and with it the entire top-N), and the only one whose alerts write back into tasks (blast radius +tasks) with the assignee derived from staff_roster rather than the instruction."
+  },
+  "horizon_tier": 2
+}

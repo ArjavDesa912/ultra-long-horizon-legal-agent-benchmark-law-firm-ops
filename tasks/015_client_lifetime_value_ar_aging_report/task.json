@@ -1,0 +1,92 @@
+{
+  "task_id": "015_client_lifetime_value_ar_aging_report",
+  "name": "law_firm_software_015_client_lifetime_value_ar_aging_report",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "reporting"
+  ],
+  "surface": "backend",
+  "instruction": "Build the firm's client lifetime-value and open-AR report for this episode, batched under the episode batch code (ops_meta, meta_key='episode_state'; the episode row also carries the episode date and the top_n knob the ranking is cut by). Apply the firm's client-value and open-AR definitions exactly as firm policy KPI-CLIENT-01 states them \u2014 read the live policy row first and pay particular attention to what it says about client trust balances before you compute anything. Every client in the clients collection gets exactly one ops_reports row (report='client_value', batch_code) carrying that client's lifetime value, open AR, trust balance and invoice activity, plus one firm-wide rollup row aggregating the per-client figures. Some invoices reference a client id that resolves to no clients row; scope the report so they corrupt nothing. Then rank the per-client rows by open AR and record the firm's top-N as ops_reports rows (report='high_ar_client', batch_code) with each client's rank and figures \u2014 where one report summarizes another, firm policy SEVERITY-01 requires reusing the summarized rows' values rather than recomputing. Finally reconstruct, as of each of the four standard close dates the firm's close calendar defines relative to the episode date (the calendar quarter-ends immediately preceding it), what the firm's open AR was on the same open-invoice basis the policy defines counting only invoices that had been issued by that date, and push one ops_reports row per close date (report='ar_history', batch_code). No other ops_reports rows for these reports and this batch may exist. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 794,
+  "par_steps": 529,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "top_n": {
+        "min": 5,
+        "max": 15
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "mistake",
+      "mechanism": "trust_balance is a client LIABILITY (policy KPI-CLIENT-01: reported separately, never added to lifetime value). Adding it into lifetime value inflates every client row and the FIRM rollup by the firm's total trust liability \u2014 snapshot-confirmed: 10,080,508 across 500 clients, a plausible-looking but wrong rollup."
+    },
+    {
+      "category": "decoy_boundary",
+      "mechanism": "5 invoices reference client ids that resolve to no clients row (missing-client-7..11, snapshot-confirmed: 5). Attributing them to any client, or folding them into the FIRM rollup, writes plausible wrong totals; the policy's client-scoped definitions exclude them."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One client_value row per client (~500) plus one FIRM rollup; every derived number independently confirmed via raw-row aggregation AND a SQL GROUP BY over invoices, agreeing with each other and with what was written; trust_balance reported separately from lifetime value; top-N ranking and the four quarter-end reconstructions exact against the episode-row knobs.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one client_value row per client plus FIRM rollup, one high_ar_client row per rank, one ar_history row per close date"
+      },
+      {
+        "type": "dual_path",
+        "collection": "invoices",
+        "expect": "per-client lifetime_value/open_ar/invoice_count agree between Python aggregation and SQL GROUP BY, and both agree with the written rows"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "trust_balance folded into lifetime_value (wrong-inclusion) or dangling-client invoices attributed to any client/rollup => FAIL"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius (governance collections canaried automatically)"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "client lifetime value law firm trust balance liability not revenue accounting",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "What Is a Client Trust Liability Account? (leanlaw.co)",
+          "Trust Accounting: How To Best Account for Legal Trust Income (firmlyprofits.com)",
+          "Retainer Fee Accounting: Recording, Revenue, and Tax Rules (legalclarity.org)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "client lifetime value open AR trust liability quarter-end aging reconstruction benchmark task law firm",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Law Firm Bookkeeping: Chart of Accounts, Client Cost Advances, and Monthly Close (bluecloudcpa.com)",
+          "Contingency Revenue: Gross or Net of Costs? (leanlaw.co)",
+          "Client Financial Health Scorecards (intapp.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "Client-centric financial rollup whose difficulty is definitional, not mechanical: the policy (KPI-CLIENT-01) makes trust_balance a separately-reported liability, so the plausible move of folding it into client value inflates LTV by the firm's whole trust position; plus a point-in-time stage reconstructing open AR at the four policy-defined quarter-ends. Distinct from 021's invoice-centric buckets and 001's trust-ledger repair."
+  },
+  "horizon_tier": 2
+}

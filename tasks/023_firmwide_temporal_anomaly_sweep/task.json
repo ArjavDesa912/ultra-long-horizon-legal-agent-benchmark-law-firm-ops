@@ -1,0 +1,91 @@
+{
+  "task_id": "023_firmwide_temporal_anomaly_sweep",
+  "name": "law_firm_software_023_firmwide_temporal_anomaly_sweep",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "audit"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firmwide temporal-impossibility sweep, batched under the episode batch code (ops_meta). Mutate nothing. The firm's control registry (firm_controls) lists the temporal controls and which of them are enabled; run exactly the enabled temporal controls, each against every row of the collection it scopes, and count the rows that violate the control's rule as the registry words it. Controls the registry does not enable are out of scope and must not be reported, no matter how many rows would fail them. Push one ops_reports row per enabled temporal control (report='temporal_control_finding', batch_code) with {control_id, rule_key, scope_collection, violation_count}. STAGE 2 -- push one summary row (report='temporal_anomalies', batch_code) with {total_anomalies, by_rule (one entry per enabled control's rule key), clean (true iff total_anomalies is 0)}, reusing this batch's finding rows per firm policy SEVERITY-01. STAGE 3 -- per SEVERITY-01, push one severity row (report='temporal_anomaly_severity', batch_code) reusing the summary row's values: worst_rule, worst_rule_count, overall_severity (critical iff total_anomalies exceeds the episode row's severity_critical_count, else low). No other ops_reports rows for this batch under these three report names may exist. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 46,
+  "par_steps": 30,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "severity_critical_count": {
+        "min": 30,
+        "max": 80
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "scope_boundary",
+      "mechanism": "Two dormant temporal controls (CTL-TMP-05/06) sit in the registry with substantial NATURAL violation counts at bulk scale -- 426 deadlines dated before their matter's date_opened and 739 invoices issued before their matter's date_opened in the snapshot (planted: 0, natural background: 426/739, snapshot-confirmed). Reporting either dormant control -- or folding their counts into total_anomalies -- is a plausible, wrong sweep that FAILs; the agent must discover from the registry which controls are enabled."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "CTL-TMP-04 uses ON-OR-BEFORE semantics while CTL-TMP-01/02/03 are strictly-before; the registry's rule text states each one. Blindly reusing the strict comparison across all four rules yields 2 instead of 4 for grant_decision_before_submission (the snapshot plants 2 equal-date decisions alongside 2 strict ones -- planted: 2 equal + 2 strict, snapshot-confirmed), a plausible wrong count the verifier rejects."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One temporal_control_finding row per ENABLED temporal control (exactly the 4 registry rows with enabled=true; the 2 dormant controls absent), each count matching both a raw-row filter and a SQL aggregate; one temporal_anomalies summary row whose by_rule carries exactly the enabled rule keys and whose total is their sum; one temporal_anomaly_severity row per SEVERITY-01 derived from the summary row's own values with the episode row's severity_critical_count.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "exactly one finding row per enabled temporal control, one summary row, one severity row; dormant controls absent"
+      },
+      {
+        "type": "dual_path",
+        "collection": "all four scoped collections",
+        "expect": "every per-control count agrees between the raw-row filter and SQL, and both agree with the pushed rows"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "reporting a dormant control, or applying strict-before semantics to CTL-TMP-04, produces wrong counts and FAILs"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius (governance collections always canaried)"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "temporal data validation date ordering consistency checks data quality",
+        "top_results": [
+          "Temporal Data Validation | Software Patterns Lexicon",
+          "ExDataCheck temporal expectations (github.com/North-Shore-AI/ExDataCheck)",
+          "chronologic-validator: ordered date sequence validation (github.com)"
+        ],
+        "retrieved_at": "2026-09-10"
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "firmwide temporal anomaly sweep control registry enabled dormant benchmark task law firm",
+        "top_results": [
+          "Data Integrity Audits for Legal Case Management Systems (intapp.com)",
+          "The Root Causes of Data Quality Issues (metaplane.dev)",
+          "Cross-Table Date Consistency Checks (dama.org)"
+        ]
+      }
+    ],
+    "differentiation_note": "v2 moves the rule definitions out of the instruction and into the firm_controls registry: the agent discovers WHICH temporal controls are enabled (two dormant ones carry large natural violation counts and must stay unreported) and that CTL-TMP-04's semantics differ from its three siblings -- a rule set that is no longer narrated anywhere, only derivable from the registry rows."
+  },
+  "horizon_tier": 2
+}

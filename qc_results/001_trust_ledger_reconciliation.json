@@ -1,0 +1,99 @@
+{
+  "task_id": "001_trust_ledger_reconciliation",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: client 1 trust_balance corrected to ledger truth: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 6.7
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: client 1 trust_balance corrected to ledger truth: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 4.2
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: client 1 trust_balance corrected to ledger truth: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 4.2
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 1012 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 17.0
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 19.2
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 17.8
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 1957 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 19.9
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 17.5
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 999 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 14.6
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 18.6
+    }
+  },
+  "reset_seconds": 17.0,
+  "nonce": "EP-5849AD6F",
+  "measured_gold_steps": 1012,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

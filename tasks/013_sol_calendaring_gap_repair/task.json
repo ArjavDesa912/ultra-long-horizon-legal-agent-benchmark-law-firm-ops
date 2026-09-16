@@ -1,0 +1,97 @@
+{
+  "task_id": "013_sol_calendaring_gap_repair",
+  "name": "law_firm_software_013_sol_calendaring_gap_repair",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "repair",
+    "create"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's statute-of-limitations calendaring audit, batched under the episode batch code (ops_meta), as of the episode date, per firm policy SOL-01 (in firm_policies). Failing to calendar a matter's statute of limitations is one of the most common causes of legal malpractice claims, so the audit must leave the firm's docket exactly as the policy defines compliance. Work the audit the policy defines across every matter it covers: identify which matters' SOL deadlines are missing entirely, which are docketed with a legitimate lead-time buffer, and which are docketed so late that the reminder no longer precedes the bar -- then repair the docket accordingly (the policy governs what creation, re-dating, surplus removal, and leave-untouched mean, and which attorney a new deadline is assigned to). Every repaired deadline's own record must carry its diagnosis: the prior due date and the cause class the policy implies. Record what the sweep found and did in one ops_reports row (report='sol_calendaring_audit', batch_code) with the outcome counts the policy's classes imply. Finally, for every matter the audit covered (re-read live, post-repair), derive its deadline's risk picture per the policy's urgency rule using the episode row's urgency_cutoff_days value, and push one ops_reports row per matter (report='sol_risk_ranking', batch_code, matter_id, due_date, days_until_due, urgency). No other ops_reports rows for this batch_code under 'sol_calendaring_audit' or 'sol_risk_ranking' may exist. Do not modify matters or any deadline the policy says is already compliant. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 470,
+  "par_steps": 313,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "urgency_cutoff_days": {
+        "min": 20,
+        "max": 45
+      }
+    }
+  },
+  "blast_radius": [
+    "deadlines",
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "lapse",
+      "mechanism": "Open litigation matters whose statute_of_limitations is set but which have no statute-type deadline at all (planted via ~3-of-5 bulk density plus hand fixtures; snapshot-confirmed: 112 gap matters of 149 candidates). A real population findable only by a filtered query -- the v1 fake-haystack (2 hand rows) is gone."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "Statute deadlines dated ON OR AFTER the matter's SOL (the reminder no longer precedes the bar): 4 planted late-docketed deadlines (notes 'Docketed late') plus natural background -- snapshot-confirmed 11 total. Per SOL-01 these must be re-dated to the SOL, not skipped and not duplicated."
+    },
+    {
+      "category": "normalization_of_deviance",
+      "mechanism": "31 compliant lead-time-buffer statute deadlines (dated EARLIER than the SOL -- normal practice) must be left byte-identical; an agent that 'normalizes' every statute deadline to the SOL date corrupts them (snapshot-confirmed 31)."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Every open litigation matter with a statute_of_limitations value ends up with exactly one statute-type deadline dated at the SOL (buffers earlier than the SOL stay untouched byte-identical; late-docketed ones are re-dated, not duplicated; gaps get a new deadline per policy). One sol_calendaring_audit summary row plus one sol_diagnosis row per re-dated deadline (naming the prior date and the mistake), and one sol_risk_ranking row per created/re-dated deadline keyed to the episode row's urgency_cutoff_days. Every count is confirmed two independent ways (raw rows and SQL) which must agree with each other and with the written rows. matters and every other collection are canary-checked byte-identical.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "deadlines",
+        "expect": "exactly one statute deadline per candidate matter, due_date = the matter's SOL; seed buffers byte-identical; no duplicates"
+      },
+      {
+        "type": "dual_path",
+        "collection": "matters",
+        "expect": "candidate set (open litigation with SOL) agrees between raw-row filter and SQL"
+      },
+      {
+        "type": "dual_path",
+        "collection": "ops_reports",
+        "expect": "audit counts and risk-ranking rows agree between Python-derived expectations and SQL over the written rows"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius, plus every untouched seed deadlines row byte-identical"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "retrieved_at": "2026-09-10",
+    "domain_searches": [
+      {
+        "query": "statute of limitations calendaring failure legal malpractice claims most common cause",
+        "top_results": [
+          "Missed deadlines are the leading cause of legal malpractice claims, 24.6% of all claims (ustechautomations.com citing ABA Standing Committee on Lawyers' Professional Liability)",
+          "Scheduling Errors and Legal Malpractice (tlie.org) -- administrative scheduling errors 28.49% of claims",
+          "Calendar related errors account for over 34% of malpractice actions (deadlines.com citing ABA Profile)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "statute of limitations gap detection auto create deadline benchmark task law firm agent",
+        "top_results": [
+          "SOL Tracking Software for Litigation (compulaw.com)",
+          "Docketing rules engines for court deadlines (courtdrive.com)",
+          "Malpractice Risk Audits for Docketing Systems (americanbar.org)"
+        ]
+      }
+    ],
+    "differentiation_note": "v2 replaces the v1 2-row hand fixture with a ~149-matter candidate population (density-planted SOL values), three outcome classes the agent must distinguish from policy (gap vs lead-time buffer vs late-docketed non-compliant deadline requiring re-dating), an episode-randomized urgency cutoff, and a diagnosis requirement -- the buffer-vs-gap distinction is a judgment against live data, not a null-check."
+  }
+}

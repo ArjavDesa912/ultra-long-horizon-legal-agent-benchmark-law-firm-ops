@@ -1,0 +1,96 @@
+{
+  "task_id": "002_privilege_clawback_audit",
+  "name": "law_firm_software_002_privilege_clawback_audit",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "audit",
+    "aggregation"
+  ],
+  "surface": "backend",
+  "instruction": "Audit the firm's finalised and served e-discovery productions for privileged material that left the firm, applying the firm's clawback procedure PRIV-CLAWBACK-01 (in firm_policies), batched under the episode batch code (ops_meta), as of the episode date. Which documents a production actually produced is derivable from the production's own Bates fields and each document's bates_number; the policy decides which of those disclosures are clawback violations -- including which productions are exempt, how the two privilege classifications differ, and what the log's reason must say about them. Log every violation the policy identifies as privilege_log rows (event='clawback_required', carrying the document's real ids and flagged with the episode date), then summarise what the log now contains: one ops_reports row per affected matter (report='clawback_followup') with that matter's violation count, its produced-document count, and the exposure ratio between them, plus one firm-wide summary row (report='privilege_clawback_audit') carrying the productions checked, the documents found inside production ranges, and the violations found. No other privilege_log or ops_reports rows for this batch_code under those two report names may exist. Do not modify ediscovery_documents or ediscovery_productions -- the produced record stays exactly as it is; the violation is logged externally, the way a real clawback notice would be. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 40,
+  "par_steps": 26,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code"
+  },
+  "blast_radius": [
+    "privilege_log",
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "mistake",
+      "mechanism": "7 in-range privileged documents on uncovered finalised/served productions must each be logged with their privilege classification (planted: 6 bulk + the hand-authored DEF000001 on PROD-2026-001; snapshot-confirmed: 7). Missing any is an unlogged clawback exposure."
+    },
+    {
+      "category": "violation",
+      "mechanism": "4 in-range privileged documents sit on productions with clawback_order_status='covered' (planted, snapshot-confirmed: 4) -- PRIV-CLAWBACK-01 says a 502(d)-style order means inadvertent disclosure does not waive privilege; flagging any of them = FAIL."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "37 draft productions exist in the current snapshot (snapshot-confirmed) and PRIV-CLAWBACK-01 excludes them from clawback exposure; logging any document whose only range match is a draft production = FAIL."
+    },
+    {
+      "category": "slip",
+      "mechanism": "338 filler documents carry privilege != 'none' but sit OUTSIDE every production Bates range (snapshot-confirmed: 338) -- a privilege-only scan with no range derivation over-reports by 338 plausible wrong log rows."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One privilege_log row per genuine in-range privileged document on an uncovered finalised/served production (planted: 7, snapshot-confirmed), each carrying the document's real ids, the production's real id, and a reason that names the document's privilege classification; none for covered productions, draft productions, or out-of-range documents. One clawback_followup row per affected matter whose counts derive from the logged rows, and one privilege_clawback_audit summary row whose productions_checked/documents_in_range/violations_found match the live-computed set exactly. Both the in-range and violation counts are confirmed two independent ways (raw-row Bates filtering and a SQL join) which must agree. ediscovery_documents and ediscovery_productions untouched.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "privilege_log",
+        "expect": "exactly the policy-derived violation set, classified per privilege type"
+      },
+      {
+        "type": "dual_path",
+        "collection": "ediscovery_documents",
+        "expect": "in-range and violation counts agree between raw-row Bates filtering and a SQL join"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "per-matter followup rows derived from the written log rows; firm summary counts exact"
+      },
+      {
+        "type": "canary_hash",
+        "collection": "all seeded collections outside blast_radius, including ediscovery_documents and ediscovery_productions"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "FRE 502(b) reasonable-steps test",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Federal Rule of Evidence 502 (law.cornell.edu)",
+          "Clawback Agreements and FRE 502: A Practical Guide (americanbar.org)",
+          "Inadvertent Production of Privileged Documents: What to Do (reuters.com/legal)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "e-discovery bates range privilege audit benchmark task clawback agent",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "E-Discovery Review QC Checklists (relativity.com)",
+          "Privilege Log Best Practices (law.com)",
+          "Bates Numbering and Document Production Standards (exterro.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "Distinct from generic 'find privileged documents' tasks: production membership is derived from a numeric Bates range rather than a stored link, the covered/none 502(d) distinction and the attorney_client vs work_product classification come from the seeded policy (not the instruction), and three near-miss classes (covered productions, draft productions, out-of-range privileged filler) each fail a naive solution in a different way."
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "task_id": "015_client_lifetime_value_ar_aging_report",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: client_value row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.3
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: client_value row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.4
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: client_value row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.3
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 525 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 5.5
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 11.8
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.7
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 1038 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 4.9
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.5
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 525 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 4.5
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 9.0
+    }
+  },
+  "reset_seconds": 31.3,
+  "nonce": "EP-ADB71ABD",
+  "measured_gold_steps": 525,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

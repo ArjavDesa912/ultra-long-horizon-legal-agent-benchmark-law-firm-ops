@@ -1,0 +1,103 @@
+{
+  "task_id": "001_trust_ledger_reconciliation",
+  "name": "law_firm_software_001_trust_ledger_reconciliation",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "repair",
+    "aggregation"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's monthly three-way trust reconciliation, per firm policy TRUST-REC-01 (in firm_policies), batched under the episode batch code (ops_meta), as of the episode date. The bar's trust-accounting rules require the balance the firm shows for a client to match what that client's own transaction ledger says it is owed, and require the firm to know when those two disagree. Work the reconciliation the policy defines: recompute each client's true sub-ledger balance from the trust_transactions ledger (the policy governs same-date ordering and clients with no ledger activity), correct the stored client balances where they disagree, and backfill invoices' trust_applied from the trust withdrawals that paid them -- the policy's boundary-delimited reference rule decides which withdrawals pay which invoice (a longer number that merely contains a shorter invoice's number is a different invoice). Then report: one ops_reports row per reconciled client plus one firm-wide rollup under report='trust_reconciliation' -- the rollup carries the stored-balance total as it stood before correction, the true-balance total, the discrepancy between them in cents, and the count of corrected clients. Clients with no trust activity and no stored balance have nothing to reconcile and get no rows. Finally classify every reconciled client's corrected balance into the policy's exposure tiers using the episode row's exposure_tier_cutoff value, pushing one ops_reports row per client plus a firm-wide tier rollup under report='trust_exposure_tier'. No other ops_reports rows for this batch_code under those two report names may exist. Never modify trust_transactions -- the ledger is the source of truth and must survive byte-identical. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 1547,
+  "par_steps": 1031,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "exposure_tier_cutoff": {
+        "min": 2000,
+        "max": 8000
+      }
+    }
+  },
+  "blast_radius": [
+    "clients",
+    "invoices",
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "lapse",
+      "mechanism": "40 bulk clients' stored trust_balance drifted from their ledger (planted: 40, snapshot-confirmed plan; per-rebuild drift put the current snapshot at 44 drifted clients -- the verifier recomputes the set from the seed snapshot, never hardcodes it). The same defect class as the hand-authored CLI-2026-001/002/004/005 staleness; every other client is correct by construction and must be left that way."
+    },
+    {
+      "category": "copy_paste_drift",
+      "mechanism": "withdrawal reference contains INV-2026-0071 -- a bare-substring match mis-applies it to invoice INV-2026-007 (planted trap reference on the first bulk client's ledger rows; 6 such rows in the current snapshot). Boundary-delimited matching per TRUST-REC-01 leaves both INV-2026-007 and INV-2026-071 untouched; a bare-substring match writes a plausible wrong trust_applied."
+    },
+    {
+      "category": "normalization_of_deviance",
+      "mechanism": "the two real trust-paid invoices (INV-2026-001/002, references name them explicitly) sit in a ledger where ~40k bulk rows never reference an invoice by design -- an agent that 'fixes' trust_applied firm-wide from client-level withdrawal totals corrupts hundreds of clean invoices (snapshot-confirmed: only INV-2026-001 and INV-2026-002 have boundary-delimited matching withdrawals)."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Every client's stored trust_balance equals the balance_after of its chronologically-latest trust_transactions row (0 if none); the drifted subset (planted: 40) is corrected and the already-correct majority is untouched. Invoice trust_applied is backfilled only where a withdrawal boundary-matches the invoice's full number (INV-2026-001/002 only; the INV-2026-0071 trap must not reach INV-2026-007 or INV-2026-071). One trust_reconciliation row per in-scope client plus the firm rollup (stored_total/true_total/discrepancy_cents/clients_corrected), and one trust_exposure_tier row per in-scope client plus the tier rollup keyed to the episode row's exposure_tier_cutoff. Every derived aggregate is confirmed two independent ways (raw-row filter and SQL) which must agree with each other and with the written rows. trust_transactions and every other collection are canary-checked byte-identical.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "clients",
+        "expect": "trust_balance matches the recomputed ledger balance for every client"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "invoices",
+        "expect": "trust_applied backfilled only where a boundary-delimited matching withdrawal exists"
+      },
+      {
+        "type": "dual_path",
+        "collection": "trust_transactions",
+        "expect": "per-client latest balance_after and per-client transaction counts agree between raw-row filter and SQL"
+      },
+      {
+        "type": "dual_path",
+        "collection": "ops_reports",
+        "expect": "reconciliation and tier rollups agree between Python-derived expectations and SQL GROUP BY over the written rows"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius, including trust_transactions itself"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "retrieved_at": "2026-09-10",
+    "domain_searches": [
+      {
+        "query": "IOLTA three-way reconciliation control balance",
+        "top_results": [
+          "ABA Model Rules of Professional Conduct Rule 1.15: Safekeeping Client Property (americanbar.org)",
+          "What Is IOLTA Three-Way Reconciliation? (clio.com)",
+          "Trust Accounting for Law Firms: A Complete Guide (lawpay.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "law firm trust ledger balance reconciliation benchmark task stale cached balance agent",
+        "top_results": [
+          "Trust Accounting Software Comparison (lawyerist.com)",
+          "IOLTA Compliance Checklist for Solo and Small Firms (clio.com)",
+          "Legal Trust Accounting Errors and How to Avoid Them (mycase.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "Fuses a per-client ledger-balance recompute (with a planted stale-balance subset), a boundary-delimited invoice-to-withdrawal backfill carrying a substring trap (INV-2026-0071 vs INV-2026-007), and a four-stage dependent report chain (reconciliation rollup whose third leg is the pre-correction stored total, then episode-knob exposure tiers) in one mission -- no other task in this suite or in public benchmarks combines ledger-truth repair with a bare-substring mis-application trap."
+  }
+}

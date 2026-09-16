@@ -1,0 +1,95 @@
+{
+  "task_id": "009_grant_pipeline_risk_dashboard",
+  "name": "law_firm_software_009_grant_pipeline_risk_dashboard",
+  "version": "2.0.0",
+  "difficulty": "medium",
+  "horizon_tier": 2,
+  "category": [
+    "aggregation"
+  ],
+  "surface": "backend",
+  "instruction": "Build the grant pipeline risk dashboard for firm leadership, batched under the episode batch code (ops_meta), as of the episode date. The dashboard answers three questions the development office tracks, each over its own live population: which funding opportunities still in play have decision deadlines approaching inside the episode row's opp_window_days, what those opportunities are collectively worth at their maximum award, which required reports are coming due inside the same window without a submitted or accepted submission, and which active awards reach their end date inside the award_end_window_days window. The firm's grant-reporting policy (GRANT-REPORT-01) governs which report and opportunity statuses still count as 'in play'. Push exactly one ops_reports row (report='grant_pipeline_risk', batch_code) carrying those four figures. Then detail every opportunity the first figure counted: one ops_reports row per opportunity (report='grant_pipeline_risk_detail', batch_code) with the opportunity's identity, its deadline, and its max award -- derived from the same counted set, not recomputed with a different window. No other 'grant_pipeline_risk' or 'grant_pipeline_risk_detail' rows for this batch may exist. Do not modify any source collection. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 40,
+  "par_steps": 26,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "opp_window_days": {
+        "min": 25,
+        "max": 35
+      },
+      "award_end_window_days": {
+        "min": 50,
+        "max": 70
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "slip",
+      "method": null,
+      "mechanism": "window edges are inclusive on both ends and move with the episode knobs (opp 25-35d, award-end 50-70d) -- an off-by-one at either boundary shifts the counted set (snapshot-confirmed: the 30-day window boundary splits opportunities with deadlines exactly at the edge)."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "status semantics differ per collection: opportunities 'awarded'/'declined'/'withdrawn' are out of play, but reports only drop out when submitted or accepted -- treating 'draft' or 'revision_required' reports as done undercounts the risk set (snapshot-confirmed mixed statuses)."
+    },
+    {
+      "category": "latent_organizational",
+      "mechanism": "stage-2 detail rows must derive from stage-1's counted set; recomputing with a different window silently diverges from the dashboard row and fails the cross-check."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One grant_pipeline_risk row with the four window-driven figures (opportunities at risk, their summed max_award, reports due soon not yet submitted/accepted, awards nearing end) and one detail row per at-risk opportunity, all derived from the episode row's windows and the policy's status semantics; dual-path confirmed.",
+    "checks": [
+      {
+        "type": "dual_path",
+        "collection": "grant_opportunities",
+        "expect": "at-risk count and value agree between Python filter and SQL"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "dashboard row + detail rows exact vs episode-knob windows and policy statuses"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "retrieved_at": "2026-09-10",
+    "domain_searches": [
+      {
+        "query": "grant pipeline deadline risk tracking research office",
+        "top_results": [
+          "Federal Grant Reporting Requirements: A Guide (casrai.org)",
+          "2 CFR 200.328 Financial reporting (law.cornell.edu)",
+          "Grant lifecycle management best practices (grants.gov)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "grant pipeline risk dashboard benchmark task deadline window agent",
+        "top_results": [
+          "Research administration dashboards (casrai.org)",
+          "Grant lifecycle tracking (foundationcenter.org)",
+          "Award lifecycle compliance (cfo.gov 2 CFR FAQs)"
+        ]
+      }
+    ],
+    "differentiation_note": "Two different windows on two different collections plus a policy-driven status filter, with a detail stage that must reuse the first stage's counted set -- recomputing with a shifted window is the natural failure."
+  }
+}

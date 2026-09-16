@@ -1,0 +1,93 @@
+{
+  "task_id": "006_new_matter_intake_conflict_check",
+  "name": "law_firm_software_006_new_matter_intake_conflict_check",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "create",
+    "workflow"
+  ],
+  "surface": "backend",
+  "instruction": "Open the matter 'Green Earth Foundation v. Tech Innovations Inc' per the firm's intake procedure INTAKE-01 (in firm_policies), batched under the episode batch code (ops_meta), as of the episode date. The client is Green Earth Foundation; the proposed opposing party is Tech Innovations Inc. Run the conflict screen the policy defines before opening anything -- it decides, from the firm's own client, contact, and matter history (and the episode row's former_client_window_years), whether the matter may open normally or must open pending partner review, and what the matter's description must note when a conflict is flagged. Choose the responsible attorney and the supervising partner exactly as the policy prescribes from the firm's roster and live time-entry history. Create the matter with the number the policy's numbering rule requires, and record the intake audit as one ops_reports row (report='intake_conflict_audit', batch_code) naming the matter, the screen outcome, and the matches the screen considered -- including the basis for anything flagged. Create only this one matters row and the audit row; do not modify clients, contacts, time_entries, or any other collection. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 124,
+  "par_steps": 82,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "former_client_window_years": {
+        "min": 2,
+        "max": 6
+      }
+    }
+  },
+  "blast_radius": [
+    "matters",
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "mistake",
+      "mechanism": "normalized-name near-miss: contact 'TechInnovations LLC' normalizes to the same name as client 'Tech Innovations Inc' -- INTAKE-01's normalization (lowercase, alphanumeric-only, legal-form words removed) decides it IS a match (planted: 1 contact; specified in the v2 seed plan, absent from the current snapshot capture -- see ASSUMPTIONS). A name-only exact-match screen misses it; the policy's normalization rule decides it."
+    },
+    {
+      "category": "decision_pressure",
+      "mechanism": "the proposed opposing party is itself a current client (CLI-2026-003) and a former client on matter 2026-008 (closed ~400d ago, inside every window) while matter 2026-009 (closed ~2600d ago) is outside every window up to 6 years (planted: 2 window-edge matters, snapshot-confirmed) -- opening 'open' instead of 'conflict_check', or citing 2026-009 as a conflict, = FAIL."
+    },
+    {
+      "category": "copy_paste_drift",
+      "mechanism": "attorney selection: fewest total time_entries hours among active partner/associate roster rows -- EMP-006 (counsel, departed) and EMP-003/EMP-004 (wrong roles) are near-misses the roster filters out; the pick moves with live time_entries each rebuild."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Exactly one new matters row: matter_number continues the highest existing YYYY-NNN sequence in the episode year; status reflects the policy's conflict-screen outcome (conflict_check when a conflict is found, else open); description notes the flagged counterparty iff a conflict was found and never cites matter 2026-009 as a conflict; client_id resolves to Green Earth Foundation's real id; responsible_attorney is the policy-derived fewest-hours active partner/associate; supervising_partner is the only active partner; conflict_checked records that the screen ran. One intake_conflict_audit ops_reports row names the matter, the outcome, and the conflict basis. No other collection touched.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "matters",
+        "expect": "exactly one new row: numbering derived from live max, status per outcome, attorney policy-derived, description notes the flagged counterparty iff conflict"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one audit row naming the matter and the conflict basis; near-miss matter 2026-009 not cited as a conflict"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius, including clients and contacts"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "ABA 1.9 former-client intake",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "ABA Model Rule 1.9: Duties to Former Clients (americanbar.org)",
+          "Conflict Checking Software for Law Firms Explained (clio.com)",
+          "New Matter Intake Best Practices Checklist (lawpay.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "law firm new matter intake responsible attorney workload balancing assignment benchmark task",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Matter Staffing and Workload Balancing in Law Firms (lawyerist.com)",
+          "How Law Firms Assign New Matters to Attorneys (attorneyatwork.com)",
+          "Practice Management Software Matter Creation Workflows (mycase.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "The most-leaked v1 task, fully rewritten: the roster now lives in staff_roster (not prose), the conflict screen's normalized-name rule, former-client window edge (008 in / 009 out), and attorney selection all come from the seeded policy + live data rather than the instruction, and the near-miss web (dba-variant contact, window-edge matters, wrong-role roster rows) fails a naive solution in three different ways."
+  }
+}

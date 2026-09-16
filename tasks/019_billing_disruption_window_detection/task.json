@@ -1,0 +1,100 @@
+{
+  "task_id": "019_billing_disruption_window_detection",
+  "name": "law_firm_software_019_billing_disruption_window_detection",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "anomaly_detection"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's billing disruption detection sweep for this episode, batched under the episode batch code (ops_meta, meta_key='episode_state'; the episode row also carries the episode date, the min_bucket_size knob and the severity_multiplier_tenths knob the detection threshold is built from). The firm suspects a past period in which clients' ability to pay deteriorated sharply, but nobody recorded when. Apply the firm's detection procedure in firm policy DISRUPT-01 exactly as the version in force at the episode date states it \u2014 two effective-dated versions of that policy exist in firm_policies, and only one is live at the episode date; in particular the severity multiplier it prescribes and which buckets it feeds into the median. Age every invoice the way the policy prescribes, keep only the buckets the policy considers, and derive each bucket's bad rate, the median across them, and the buckets that breach the policy's threshold. Push one ops_reports row per disrupted bucket (report='billing_disruption', batch_code) carrying the bucket's index, its age window in days, its invoice count and its bad rate, plus one summary row (report='billing_disruption_summary', batch_code) carrying the median bad rate, how many buckets are disrupted and how many were considered. STAGE 2 \u2014 firm policy SEVERITY-01 requires a report that summarizes another to reuse the summarized rows' values rather than recompute them: from the disrupted-bucket rows and the summary row, push one ops_reports row per disrupted bucket (report='disruption_severity', batch_code) carrying the bucket's severity multiple of the median. No other ops_reports rows for these reports and this batch may exist. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 29,
+  "par_steps": 19,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "severity_multiplier_tenths": {
+        "min": 12,
+        "max": 15
+      },
+      "min_bucket_size": {
+        "min": 50,
+        "max": 120
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "decision_pressure_context",
+      "mechanism": "A real, deliberately-planted firm-wide billing disruption spans invoices issued ~340-400 days before the episode date (an economic-downturn-shaped background chaos event per TASK_GENERATION_PIPELINE.md \u00a75a, not a per-row bug): the buckets covering that window run ~72-90% bad-status rate against a ~46-54% baseline everywhere else (snapshot-confirmed at the capture-time episode date: 3 disrupted buckets at the 1.3x default; 2-3 depending on the live episode multiplier). The instruction names the symptom and the policy, never the bucket indices or dates \u2014 the agent must compute the median and threshold from live data under the in-force policy version to find them."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "Two effective-dated DISRUPT-01 versions exist (v1 effective 2024-01-01 with a fixed 1.3 multiplier; v2 effective 2026-01-01 superseding it with the episode row's severity_multiplier_tenths divided by 10). Applying the superseded version \u2014 or the live multiplier without dividing by ten \u2014 yields a plausible wrong disrupted set (snapshot: at multiplier 1.2 the ~340-400d window flags 3 buckets; at 1.5 only 2; at a hardcoded 1.3 the set matches only 1-in-3 episodes)."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "The min_bucket_size guard: buckets below the episode row's min_bucket_size invoices are excluded from consideration entirely (not counted, not in the median, never flagged). Snapshot bucket sizes span ~72-246 invoices, so a knob of 120 drops several baseline buckets and shifts the median; ignoring the guard or applying it only to the flag test writes a plausible wrong summary."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Bucket membership, per-bucket bad rates, the median and the disrupted set all recomputed dual-path (Python bucketing and SQL date-arithmetic GROUP BY) under the in-force policy version and the episode knobs, agreeing with each other and with the written rows; severity multiples derived by read-back from the stage-1 rows (SEVERITY-01).",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one billing_disruption row per disrupted bucket, one summary row, one disruption_severity row per disrupted bucket"
+      },
+      {
+        "type": "dual_path",
+        "collection": "invoices",
+        "expect": "per-bucket counts and bad rates agree between Python bucketing and SQL date-arithmetic GROUP BY"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "applying the superseded policy version, skipping the min_bucket_size guard, or recomputing severity instead of reading back stage-1 rows => FAIL"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "accounts receivable disruption write-off patterns aging analysis law firm collections",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Law Firm Write-Offs: What Your Leakage Is Trying to Tell You (attorneyatwork.com)",
+          "Accounts Receivable Aging for Law Firms: What the Numbers Are Telling You (leanlaw.co)",
+          "Law Firm Billing and Collections: Billing Cycles, Payment Terms, Fee Disputes, and AR Management (bluecloudcpa.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "invoice aging bucket bad rate median threshold anomaly detection benchmark task",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "The Revenue Blind Spot: Why A/R Aging Reports Are Failing Your Firm (oddr.com)",
+          "Law Firm AR Aging Reports: Complete Review Guide (leanlaw.co)",
+          "Statistical Anomaly Detection in Financial Time Series (investopedia.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "The suite's background-chaos-schedule task: a dated firm-wide payment disruption seeded across the historical window (~340-400 days before the episode date, ~72-90% bad rate vs a ~46-54% baseline) that must be discovered through median-threshold bucketing under the in-force effective-dated policy version \u2014 with the multiplier and small-sample guard both living in the episode row."
+  },
+  "horizon_tier": 2
+}

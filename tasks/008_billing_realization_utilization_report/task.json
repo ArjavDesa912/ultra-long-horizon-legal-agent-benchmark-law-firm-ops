@@ -1,0 +1,90 @@
+{
+  "task_id": "008_billing_realization_utilization_report",
+  "name": "law_firm_software_008_billing_realization_utilization_report",
+  "version": "2.0.0",
+  "difficulty": "medium",
+  "horizon_tier": 2,
+  "category": [
+    "aggregation"
+  ],
+  "surface": "backend",
+  "instruction": "Build the fee-earner realization report for the firm, batched under the episode batch code (ops_meta), following the firm's KPI definitions in firm_policies (KPI-REAL-01). Group the firm's recorded work by whoever performed it -- derive the population from the data, not from any fixed roster -- and report per person plus a firm-wide rollup under report='realization'. The policy defines the realization basis (which entry statuses count as billed, how written-off work is treated, and the zero-activity guard). Then, using the rows this batch produced, flag every person whose realization falls more than the episode row's realization_flag_gap percentage points below the firm-wide rate: one ops_reports row per flagged person (report='realization_flag', batch_code) carrying their own rate, the firm rate, and the gap. No other 'realization' or 'realization_flag' rows for this batch may exist. Do not modify any source collection. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 110,
+  "par_steps": 73,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "realization_flag_gap": {
+        "min": 10,
+        "max": 20
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "mistake",
+      "mechanism": "written_off entries are priced at their full amount in the ledger (planted class, snapshot-confirmed: 5971 written_off entries); KPI-REAL-01 counts them in the denominator at full value -- an agent that excludes written-off work computes a different, plausible firm realization rate and misflags the flag set."
+    },
+    {
+      "category": "latent_organizational",
+      "mechanism": "one roster employee (EMP-004) books only zero-rate, non-billable entries -- the division guard in KPI-REAL-01 (0.0 when no amount exists) decides their row; a naive percentage blows up or drops them."
+    },
+    {
+      "category": "decision_pressure",
+      "mechanism": "the flag threshold is an episode knob (10-20 points below the firm rollup); the flag set moves with it, so memorized flag lists go stale every episode."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One realization row per employee_id appearing in time_entries plus the FIRM rollup, every rate computed on the KPI-REAL-01 basis (billed = approved+invoiced over all entries by amount, written_off in the denominator at full amount, 0.0 guard for no-amount employees); realization_flag rows exactly the set more than realization_flag_gap points below the firm rate, derived from this batch's own rows. Dual-path confirmed (raw-row vs SQL).",
+    "checks": [
+      {
+        "type": "dual_path",
+        "collection": "time_entries",
+        "expect": "per-employee and firm aggregates agree between Python filter and SQL GROUP BY"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "realization rows + rollup + flag rows exact vs policy-derived expectations"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "retrieved_at": "2026-09-10",
+    "domain_searches": [
+      {
+        "query": "law firm realization rate billed vs collected definition",
+        "top_results": [
+          "Law Firm KPIs: Utilization, Realization, Collection (clio.com)",
+          "Realization vs Utilization: Five Metrics Partners Should Manage (dawgen.global)",
+          "Law Firm KPIs That Actually Matter (lawbillity.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "fee earner realization report benchmark task write-off denominator agent",
+        "top_results": [
+          "Legal KPI dashboards (lawbillity.com)",
+          "Law firm financial metrics (brightflag.com)",
+          "Realization rate definition (billable.co)"
+        ]
+      }
+    ],
+    "differentiation_note": "The difficulty is the policy-chosen denominator basis (written_off at full value) plus an episode-driven flag threshold -- both move the answer, and the natural instinct (exclude write-offs) produces a confidently wrong firm rate."
+  }
+}

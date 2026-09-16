@@ -1,0 +1,99 @@
+{
+  "task_id": "016_top_matter_profitability_report",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter_profitability row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.6
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter_profitability row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.4
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter_profitability row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.4
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 331 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 7.4
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 8.9
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 4.3
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 381 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 3.6
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 4.3
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 195 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 4.1
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 8.3
+    }
+  },
+  "reset_seconds": 39.9,
+  "nonce": "EP-E2252325",
+  "measured_gold_steps": 331,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

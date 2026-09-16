@@ -1,0 +1,112 @@
+{
+  "task_id": "007_time_entry_invoice_conversion",
+  "name": "law_firm_software_007_time_entry_invoice_conversion",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "workflow",
+    "update"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's priority invoice generation batch, per firm policy BILL-GEN-01 (in firm_policies), batched under the episode batch code (ops_meta), as of the episode date. The policy defines which matters make this batch (the episode row's top_n, ranked by approved work -- with written-off work and zero-rate entries never billed), how invoices are numbered and dated (the episode row's due_offset_days sets the payment terms), and which time entries flip once their invoice exists. Before touching anything, snapshot the firm's work in progress: one ops_reports row per matter carrying approved work under report='wip_snapshot', with that matter's approved value and entry count as it stands BEFORE the batch. After generating the invoices and flipping exactly the entries each invoice covers, push one ops_reports realization-impact row (report='realization_impact') showing the firm's realization -- measured the way the firm's KPI policy (KPI-REAL-01) defines it -- before the batch versus after, and one ops_reports exception row (report='billing_exceptions') accounting for the matters that carried approved work but fell outside this batch's cut. No other ops_reports rows for this batch_code under those report names may exist. Only invoices, time_entries, and ops_reports may be touched. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 3044,
+  "par_steps": 2029,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "top_n": {
+        "min": 10,
+        "max": 20
+      },
+      "due_offset_days": {
+        "min": 21,
+        "max": 45
+      }
+    }
+  },
+  "blast_radius": [
+    "invoices",
+    "time_entries",
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "slip",
+      "mechanism": "top-N cut boundary: matters ranked just outside the episode row's top_n (10-20) carry real approved work and must NOT be billed; snapshot background: 1914 matters carry approved value, so 'bill everything with approved time' balloons into thousands of invoices -- the cut keeps the write set bounded while still requiring a full firm-wide rank."
+    },
+    {
+      "category": "violation",
+      "mechanism": "written_off entries are priced at full amount in the data (snapshot-confirmed: 5971 written_off entries) -- BILL-GEN-01 forbids billing them; a solution that bills them or counts them as approved value produces plausible wrong invoices."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "zero-rate approved entries (snapshot-confirmed: 1256) must be skipped per BILL-GEN-01 -- including them flips non-billable entries to invoiced and corrupts line items and the realization delta."
+    },
+    {
+      "category": "copy_paste_drift",
+      "mechanism": "numbering continues the highest existing INV-YYYY-NNN with the lowest matter number billed first; reusing a memorized max or ordering by matter id instead of matter_number silently mis-numbers the batch."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Exactly top_n new invoices, one per matter in the live top-N-by-approved-value ranking (approved billable entries only; written_off never billed; zero-rate approved entries skipped), sequentially numbered from the live max INV-YYYY-NNN with the lowest matter number billed first. Only the entries included in each invoice flip to 'invoiced'; every other time_entries row (draft/submitted/already-invoiced/written_off, and every approved entry outside the cut) stays byte-identical. The WIP snapshot rows capture pre-batch per-matter approved totals; the realization-impact row's after-value is driven by the batch's exact flip set; the exception row accounts for matters with approved work excluded by the cut. Re-running the batch creates nothing further.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "invoices",
+        "expect": "exactly top_n new invoices, correct ranking, numbering continues the live max, line items per policy"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "time_entries",
+        "expect": "only the billed entries flip to invoiced; written_off and zero-rate entries stay untouched"
+      },
+      {
+        "type": "dual_path",
+        "collection": "time_entries",
+        "expect": "per-matter approved-value aggregates agree between raw-row filter and SQL GROUP BY"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "WIP snapshot (pre-batch), realization impact (before vs after), and exception rows consistent with the batch's own writes"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius, including matters and clients"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "LEDES time-entry billing",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "LEDES 1998B Format Specification (ledes.org)",
+          "Legal Billing Guidelines and Time Entry Standards (americanbar.org)",
+          "How Law Firm Invoice Generation Works (clio.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "approved time entries to invoice conversion per matter sequential numbering benchmark task idempotent",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Batch Invoicing for Multiple Matters (practicepanther.com)",
+          "Invoice Numbering Best Practices for Law Firms (lawpay.com)",
+          "Unbilled Time Reports and WIP Management (timesolv.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "A four-stage dependent billing chain whose episode knobs (top_n 10-20, due_offset_days 21-45) move the cut and every date each episode: the WIP snapshot must precede any mutation, the realization delta is silently corrupted by a wrong flip set, and the exception row accounts for the ranked-out matters -- distinct from task 006's single-matter create and every read-only ranking report."
+  }
+}

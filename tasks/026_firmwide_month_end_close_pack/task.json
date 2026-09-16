@@ -1,0 +1,126 @@
+{
+  "task_id": "026_firmwide_month_end_close_pack",
+  "name": "law_firm_software_026_firmwide_month_end_close_pack",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 6,
+  "category": [
+    "repair",
+    "workflow",
+    "aggregation"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's month-end close, batched under the episode batch code (ops_meta), as of the episode date. This is a chained seven-stage close: later stages read the state earlier stages left behind, so a stage done wrong (or skipped) does not error out -- it silently corrupts a later stage's numbers. Re-running the close in the same episode must leave the close exactly as the first run left it: no second wave of invoices, no re-flipped entries, no duplicated close rows. STAGE 0 -- capture the close's opening state: push one ops_reports row (report='close_controls', batch_code) recording the opening control totals (firm work in progress, open AR, trust liability) and the per-matter approved values that define this close's billing candidates -- the billing scope, cut and ordering are the billing policy BILL-GEN-01's, using the episode row's top_n. The opening controls are fixed at the open of the close: a re-run reuses the captured opening state rather than re-capturing it. STAGE 1 -- trust reconciliation per firm policy TRUST-REC-01: correct every client's stored trust balance to its sub-ledger value. STAGE 2 -- trust-applied backfill per TRUST-REC-01's payment-matching rule, for every invoice regardless of status. STAGE 3 -- bill this close's candidates per BILL-GEN-01: one invoice per qualifying matter covering that matter's approved entries, numbered in the policy's sequence, then flip exactly the entries billed. STAGE 4 -- reconstruct the AR aging as it stood at each close date the firm's close calendar defines (the 12 calendar month-ends preceding the episode month): push one ops_reports row per non-empty (month_end, bucket) pair (report='ar_aging_history', batch_code); an invoice that did not exist at a month-end must not appear in that month-end's buckets. STAGE 5 -- push the close pack rollup (report='close_pack', batch_code) with the close's final trust liability, the number of invoices it generated, its final WIP and its final open AR. STAGE 6 -- push the tie-out row (report='close_tieout', batch_code) reusing the captured opening controls and the close's own outputs: wip_drop (opening WIP minus final WIP), billed_value (the total billed by this close's invoices), ar_delta (final open AR minus opening open AR), ties_out (true iff wip_drop equals billed_value). Do not modify trust_transactions, matters, or any collection other than clients (trust_balance only), invoices, time_entries, and ops_reports.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 482,
+  "par_steps": 321,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "top_n": {
+        "min": 10,
+        "max": 20
+      },
+      "due_offset_days": {
+        "min": 21,
+        "max": 45
+      }
+    }
+  },
+  "blast_radius": [
+    "clients",
+    "invoices",
+    "time_entries",
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "latent_organizational",
+      "mechanism": "clients.trust_balance disagrees with the true sub-ledger balance for 44 clients in the snapshot (planted: 40, natural drift: 4, snapshot-confirmed) -- feeds stage 1 directly and the close pack's trust total indirectly, so a skipped stage 1 produces a plausible but wrong close pack, not an error."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "INV-2026-001 is already status='paid' (amount_paid == total) and still has a matching trust withdrawal: the backfill rule ignores status, so a solution that only backfills AR-relevant invoices leaves INV-2026-001.trust_applied wrong even though the omission has zero effect on any AR total (planted: 1 paid invoice with a live withdrawal, snapshot-confirmed)."
+    },
+    {
+      "category": "copy_paste_drift",
+      "mechanism": "The trust withdrawal reference 'Wire re INV-2026-0071 settlement proceeds' contains INV-2026-007 as a bare substring; TRUST-REC-01's boundary-delimited token rule forbids matching it, and invoice INV-2026-0071 does not exist. A substring match mis-applies 4997 to INV-2026-007 (planted: 1 trap reference, snapshot-confirmed) -- a plausible wrong backfill with a live effect on open AR."
+    },
+    {
+      "category": "decoy_boundary",
+      "mechanism": "Stage 4's per-month-end buckets must exclude invoices issued after that month-end; reusing the current open-AR set for every historical month-end silently overstates all 12 snapshots, most visibly the earliest (the 12-month window reaches ~13 months back and covers roughly 1900-2830 of the 3000 invoices depending on the episode date, snapshot-confirmed)."
+    },
+    {
+      "category": "decoy_boundary",
+      "mechanism": "Matters ranked below the episode row's top_n by approved value (1914 matters carry approved value in the snapshot) must NOT be invoiced, and their entries must stay 'approved' -- over-billing inflates the close pack's WIP and open AR silently."
+    }
+  ],
+  "success_criteria": {
+    "summary": "All 7 chained stages complete and are mutually consistent: one close_controls row capturing the opening controls and billing candidates; every client's trust_balance corrected to its sub-ledger value; trust_applied backfilled per TRUST-REC-01's boundary-delimited payment-matching rule for every invoice regardless of status; exactly the policy's top-N matters billed once each with only their entries flipped; 12 month-ends of point-in-time AR aging buckets scoped to invoices that existed at each month-end; one close_pack rollup; one tie-out row whose WIP drop equals the close's billed value only if stages 0-3 were done correctly. Every derived aggregate is dual-path confirmed (raw rows vs SQL) inside the verifier; interior-month correctness is asserted; breaking an earlier stage silently corrupts the later numbers.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "clients",
+        "expect": "trust_balance matches the recomputed sub-ledger balance for every client"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "invoices",
+        "expect": "trust_applied backfilled per the boundary-delimited rule for every invoice regardless of status (INV-2026-007 must stay untouched); exactly the top-N matters carry one new sequentially-numbered invoice each"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "time_entries",
+        "expect": "only the billed entries flip to invoiced; every other row byte-identical to the seed"
+      },
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "12 month-ends of ar_aging_history buckets (interior-month correctness asserted), one close_pack row, one close_tieout row consistent with the captured opening controls"
+      },
+      {
+        "type": "dual_path",
+        "collection": "trust_transactions, invoices, time_entries",
+        "expect": "per-client sub-ledger balances, open AR, WIP and each month-end's buckets agree between raw-row filters and SQL aggregates"
+      },
+      {
+        "type": "chain_break",
+        "expect": "skipping the stage-2 backfill silently corrupts the aging buckets and the close pack's open AR (QC chain-break check)"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius, including trust_transactions and matters"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "law firm month end close checklist IOLTA three-way reconciliation monthly",
+        "top_results": [
+          "How to Reconcile Your IOLTA Trust Account (Without Tripping Bar Rules) (bench.co)",
+          "Your Law Firm's Ultimate Month-End Close Checklist (leanlaw.co)",
+          "Monthly bookkeeping checklist for a small law firm (numetix.ai)"
+        ],
+        "retrieved_at": "2026-09-10"
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "chained multi-stage month end close benchmark task dependent stages point in time AR aging reconstruction agent",
+        "top_results": [
+          "Practice Management Financial Dashboards (mycase.com)",
+          "Month-End Close SOP Template for Legal Teams (glydehq.com)",
+          "Historical Aging Snapshot Reporting Best Practices (lawpay.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "The suite's long-horizon anchor, deepened honestly: 5 stages become 7 (a pre-close control-totals capture and a post-close tie-out now bracket the chain), the aging reconstruction stretches from 6 to 12 month-ends (~13 months back, ~2600 of 3000 invoices in-window at the current episode date), interior-month correctness is asserted per snapshot, and the close's opening state is captured once per batch so a re-run is provably a no-op. Every rule still lives in firm policy (TRUST-REC-01, BILL-GEN-01) or the close calendar -- the instruction narrates no formula, predicate, or stage dependency."
+  }
+}

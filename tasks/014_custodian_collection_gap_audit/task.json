@@ -1,0 +1,95 @@
+{
+  "task_id": "014_custodian_collection_gap_audit",
+  "name": "law_firm_software_014_custodian_collection_gap_audit",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "aggregation",
+    "audit"
+  ],
+  "surface": "backend",
+  "instruction": "Run the custodian collection-gap audit, batched under the episode batch code (ops_meta), as of the episode date. The firm's hold-acknowledgement policy (HOLD-ACK-01 in firm_policies) governs which holds are in scope: active holds that have been in effect for at least the episode row's gap_grace_days days. Every custodian named on an in-scope hold is supposed to have data collected for that hold's matter -- a custodian counts as covered only by a collection belonging to the hold's own matter; a collection filed under a different matter does not cover the custodian. For every in-scope hold custodian with no covering collection, push one ops_reports row (report='collection_gap', batch_code) identifying the hold, the custodian, the matter, and how long the hold has been in effect (whole days from issue to the episode date). Then push one summary row (report='collection_gap_summary', batch_code) with the total number of gaps. Finally age the gaps this batch reported into the firm's standard hold-aging buckets (under_30 / 30_90 / over_90 by days since the hold was issued) and push one ops_reports row per non-empty bucket (report='collection_gap_aging', batch_code) derived from the SAME gap rows this batch produced. No other ops_reports rows for this batch under those three report names may exist. Do not modify ediscovery_holds or ediscovery_collections. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 29,
+  "par_steps": 19,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "gap_grace_days": {
+        "min": 15,
+        "max": 45
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "lapse",
+      "mechanism": "Custodians of active holds whose data was never collected (planted: 20 bulk holds with no matching collection by construction plus the 4 hand-authored uncollected custodians on HOLD-2026-001/002/003; the live in-scope gap set recomputes per episode from the seed snapshot -- snapshot-confirmed 12 gap pairs at the minimum grace window in the current snapshot). A naive audit that skips the grace window or counts released/suspended holds over- or under-reports."
+    },
+    {
+      "category": "scope_boundary",
+      "mechanism": "5 cross-matter collections (COL-2026-XMAT-0..4, snapshot-confirmed: 5) cover their custodian under a DIFFERENT matter than the custodian's own hold -- a collection under a different matter does not cover the custodian. Naive any-collection matching misses exactly these gaps whenever the custodian's own hold is in scope; the per-matter rule (HOLD-ACK-01's coverage definition) counts them."
+    },
+    {
+      "category": "decision_pressure",
+      "mechanism": "the grace window is an episode knob (gap_grace_days 15-45): the in-scope hold set and the gap set move every episode, so memorized gap lists go stale (snapshot-confirmed: the window boundary splits holds at every episode date)."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One collection_gap row per (in-scope active hold, uncovered custodian) pair -- coverage means a collection under the HOLD's own matter referencing that custodian's contact_id; cross-matter collections do not cover. One collection_gap_summary row with the matching total, and one collection_gap_aging row per non-empty bucket derived from the same gap rows. Every derived aggregate is confirmed two independent ways (raw-row filter and SQL) which must agree with each other and with the written rows. ediscovery_holds and ediscovery_collections are canary-checked byte-identical.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one collection_gap row per real gap plus one summary row and one aging row per non-empty bucket, exact"
+      },
+      {
+        "type": "dual_path",
+        "collection": "ediscovery_holds/ediscovery_collections",
+        "expect": "the gap set agrees between the Python per-matter coverage filter and a SQL coverage aggregate"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "matching a custodian's collection under a DIFFERENT matter as coverage produces a wrong gap set and FAILs; acting on released/suspended holds FAILs"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "retrieved_at": "2026-09-10",
+    "domain_searches": [
+      {
+        "query": "legal hold custodian collection tracking gap e-discovery preservation compliance",
+        "top_results": [
+          "Legal Hold vs Preservation vs Collection (veniosystems.com)",
+          "The Preservation Gap (rgrstandard.org)",
+          "How to Automate the Legal Hold Process (mitratech.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "custodian without data collection gap audit legal hold benchmark task",
+        "top_results": [
+          "Legal Hold vs Preservation vs Collection (veniosystems.com)",
+          "Why Microsoft Purview Isn't Enough: The Legal Hold Gaps (cloudficient.com)",
+          "Are Litigation Holds Enough in Modern Data Environments? (consilio.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "v2 moves the scope rule into HOLD-ACK-01 plus an episode knob and makes the coverage rule per-MATTER: the seed plants 5 cross-matter collections for gap custodians (a collection under a different matter does not cover), so naive any-collection matching under-reports exactly those gaps -- distinct from task 003's broken hold_id FK repair and task 010's collected-vs-reviewed backlog metric."
+  }
+}

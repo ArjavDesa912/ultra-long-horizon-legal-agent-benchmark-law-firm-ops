@@ -1,0 +1,89 @@
+{
+  "task_id": "012_firmwide_conflict_of_interest_audit",
+  "name": "law_firm_software_012_firmwide_conflict_of_interest_audit",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "horizon_tier": 2,
+  "category": [
+    "aggregation",
+    "audit"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firmwide conflict-of-interest audit, batched under the episode batch code (ops_meta). The firm is litigating matters where the party on the other side is itself a client of the firm on other matters, and leadership wants every such tangle found. Apply the firm's intake conflict-screen rule (INTAKE-01 in firm_policies) across the whole existing contact book: a contact is conflicted when its organisation matches a client under the policy's name-matching rule AND the contact is linked (via its matter_ids) to a matter whose own client is a different client -- the firm's own client-side contacts sitting on their own client's matters are not conflicts. For every conflict found, push one ops_reports row (report='conflict_of_interest', batch_code) naming the contact, the matched client, and the conflicted matter, with a note diagnosing why the pair is a conflict. Then give each conflict its severity: one ops_reports row per conflict (report='conflict_severity', batch_code) -- high when the conflicted matter's current status is open, low otherwise. Finally push one summary row (report='conflict_of_interest_summary', batch_code) with the number of conflicts found; a clean sweep pushes only that summary row. No other ops_reports rows for this batch under those three report names may exist. Mutate nothing. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 32,
+  "par_steps": 21,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code"
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "latent_organizational",
+      "mechanism": "One real conflict exists in production data (planted: 1, snapshot-confirmed): contact Mary Johnson's organisation matches client Tech Innovations Inc while she is linked to matter 2026-001, whose client is Acme Corporation -- the firm is litigating against its own client's company. Bulk contacts use a disjoint ' Group'-suffixed organisation pool, so the finding stays a precise needle, not scale noise."
+    },
+    {
+      "category": "scope_boundary",
+      "mechanism": "3 same-organisation same-client near-miss contacts (General Counsel Tech -> matters 2026-003/007, Green Earth Liaison -> 2026-004, State AG Liaison -> 2026-005; snapshot-confirmed: 3 contacts / 4 contact-matter pairs) match client names exactly but their linked matters belong to the matched client itself -- an audit matching on name alone over-reports by exactly 3 and FAILs; the matched client must DIFFER from the linked matter's client."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "Former-client matters 2026-008 (closed ~400 days ago, inside any 2-6 year window) and 2026-009 (closed ~2600 days ago, outside) are matters, not contacts: an audit that sweeps matter names or applies INTAKE-01's former-client window as the audit's flag condition mis-flags them (snapshot-confirmed pair present); the organisation-match rule is the only flag basis here."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Exactly one conflict_of_interest row (Mary Johnson / Tech Innovations Inc / matter 2026-001) found via the INTAKE-01 normalized organisation match with the different-client condition, one conflict_severity row per conflict from the conflicted matter's live status, and one conflict_of_interest_summary row with conflicts_found matching the conflict set. The 3 same-org same-client near-miss contacts are never flagged (name-only matching over-reports by 3 and FAILs). contacts/clients/matters untouched; dual-path confirmed.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "exactly the INTAKE-01 conflict set (1 row), one severity row per conflict, one summary row; near-miss contacts absent"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "name-only matching over-reports by 3 (the same-org same-client near-misses) and FAILs; the severity lookup targets the conflicted matter's live status"
+      },
+      {
+        "type": "dual_path",
+        "collection": "ops_reports",
+        "expect": "conflict set and summary agree between Python-derived expectations and SQL over the written rows"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "retrieved_at": "2026-09-10",
+    "domain_searches": [
+      {
+        "query": "ABA Model Rule 1.9 former client conflict substantial relationship",
+        "top_results": [
+          "Rule 1.9: Duties to Former Clients (americanbar.org)",
+          "ABA Formal Opinion 497: Conflicts Involving Materially Adverse Interests (bostonbar.org summary)",
+          "Core Concepts for Evaluating Former Client Conflicts of Interest (aon.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "firmwide conflict of interest audit contact organisation matches existing client benchmark task",
+        "top_results": [
+          "Enterprise Conflict Checking Systems (intapp.com)",
+          "Conflict of Interest Detection in Legal Case Management (clio.com)",
+          "Cross-Matter Party Screening Tools (lawpay.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "v2 moves the conflict definition into INTAKE-01: the agent must apply the policy's NORMALIZED name matching (which decides that the near-miss dba variants ARE the same organisation) plus the different-client condition -- a name-only audit over-reports by exactly 3 on this snapshot (3 same-org same-client near-miss contacts planted) and FAILs. Distinct from task 006's create-time gate: this is a retrospective firmwide sweep over the existing contact/client/matter graph (803 contacts x 500 clients x 2002 matters)."
+  }
+}

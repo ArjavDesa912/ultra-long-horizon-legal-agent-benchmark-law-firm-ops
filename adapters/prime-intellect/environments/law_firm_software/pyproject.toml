@@ -1,0 +1,31 @@
+[project]
+name = "law-firm-software"
+description = "Law-firm practice-management RL environment (billing/trust accounting, e-discovery, grant management) by Praesidium Compliance Systems -- praesidiumsystems.ai. 26 hard tasks over a live Stackhouse BaaS (github.com/ArjavDesa912/stackhouse, stackhousedb.com); every task carries a genuine dependent-stage chain (horizon_tier >= 2, one task horizon_tier: 6) where a later stage reads state an earlier stage actually mutated or wrote, and is graded by a deterministic, fail-closed dual-path (Python + SQL) verifier -- no LLM-as-judge anywhere. Runs as a Prime Sandbox from a pre-registered image (see proj/.build.json) via verifiers.OpenEnvEnv -- no local Docker needed to install or run this package."
+readme = "README.md"
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = [
+    "verifiers[openenv]>=0.3.1",
+    "prime-sandboxes",
+]
+tags = [
+    "tool-use",
+    "database",
+    "multi-turn",
+    "tool-env",
+    "train",
+    "eval",
+    "benchmark",
+    "hard",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["law_firm_software.py", "pyproject.toml", "proj/.build.json", "proj/build_manifest.json"]
+
+[tool.verifiers.eval]
+num_examples = 5
+rollouts_per_example = 3

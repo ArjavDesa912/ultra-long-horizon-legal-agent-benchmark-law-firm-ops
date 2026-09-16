@@ -1,0 +1,90 @@
+{
+  "task_id": "017_grant_budget_burn_forecast",
+  "name": "law_firm_software_017_grant_budget_burn_forecast",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "forecasting"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's grant budget burn forecast for this episode, batched under the episode batch code (ops_meta, meta_key='episode_state'; the episode row also carries the episode date the forecast is run as-of). The forecast covers every award whose status is active or reporting_due. Apply the firm's burn-forecasting procedure in firm policy BURN-01 exactly as the live policy row states it \u2014 in particular the spend window it prescribes for an award of a given age, which branch applies is decided per award, and the guard values it names for a zero burn rate. Recompute each award's spend from the grant expense ledger yourself; the awards collection carries its own cached spend figure and firm policy SEVERITY-01 treats trusting a cached value over the ledger as a reporting violation. Push one ops_reports row per in-scope award (report='grant_burn_forecast', batch_code) carrying the recomputed spend, the cached figure for comparison, whether they agree, the award's daily burn rate, how long the remaining budget lasts at that rate, the date the budget projects to run out, and whether that date falls before the award's own end date. STAGE 2 \u2014 firm policy SEVERITY-01 requires a report that summarizes another to reuse the summarized rows' values rather than recompute them: from the forecast rows, push one ops_reports row per in-scope award (report='grant_burn_risk_tier', batch_code) carrying the award's risk tier per the policy's criticality rule and its runway in months, plus one portfolio summary row (report='grant_runway_summary', batch_code) carrying how many awards were forecasted, how many are critical, and the firmwide months of runway across the portfolio. Do not modify grant_awards or grant_expenses. Every collection this task doesn't write to must remain untouched.",
+  "max_steps": 223,
+  "par_steps": 148,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code"
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "mistake",
+      "mechanism": "Cached total_spent on grant_awards is stale for the bulk awards: 69 of the 70 in-scope awards carry a cached figure that disagrees with the expense-ledger recompute (snapshot-confirmed: 69). Only AWD-2026-001's cache is accurate (5000 = its single resolving expense). Trusting the cache writes 69 plausible wrong forecast rows."
+    },
+    {
+      "category": "integration_fault",
+      "mechanism": "499 of the 500 grant_expenses rows reference an award_id string (AWD-BULK-*) that resolves to no grant_awards row, so spend only resolves when expenses are joined on the award's award_id string; a join on the award row id silently reports zero spend for every award (snapshot-confirmed: 499 dangling expense rows, 1 resolving)."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "BURN-01's spend-window branch is the difficulty: an award older than 180 days from start_date burns on the trailing 90-day window, a younger one on lifetime spend over elapsed days (minimum 1). Applying one branch everywhere, or the wrong window boundary, gives a different daily rate, exhaustion date and risk tier for the awards with resolving spend (snapshot: 1 in-scope award, 25 days old, lifetime branch, daily 200, 125 days of runway, critical)."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One grant_burn_forecast row per in-scope award (70 in the snapshot) with the spend recomputed from the expense ledger (dual-path: Python aggregation and SQL SUM GROUP BY agree with each other and with the written rows), the BURN-01 branch applied per award, and a stage-2 tier row per award plus a firmwide runway summary derived by read-back from the stage-1 rows.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one forecast row per in-scope award, one tier row per in-scope award, one runway summary row"
+      },
+      {
+        "type": "dual_path",
+        "collection": "grant_expenses",
+        "expect": "per-award recomputed spend agrees between Python aggregation and SQL SUM GROUP BY"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "trusting cached total_spent (69 stale caches), joining expenses on award row id (zero spend), or applying one burn branch everywhere => FAIL"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "grant burn rate trailing 90 day window forecast nonprofit",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Grant Burn Rate: How to Calculate and Read It (awraops.com)",
+          "Program Expense Dashboards for Nonprofits (phoenixstrategy.group)",
+          "Grant Budget Tracking: From Proposal to Burn Rate (awraops.com)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "grant award burn forecast remaining budget exhaustion date runway months benchmark task",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Grant Budget vs Actual Tool (ledgersummit.com)",
+          "Grant Funds Tracking (ncoa.org)",
+          "Grant Compliance Financial Reporting Tools (fluxx.io)"
+        ]
+      }
+    ],
+    "differentiation_note": "The only multi-award forward-looking forecast in the suite: the difficulty is a per-award branch (trailing-window vs lifetime burn, decided by award age per policy BURN-01) with exactly one correct end-state per award, plus a stale-cache hazard on 69 of 70 in-scope awards and an expense ledger whose rows mostly dangle."
+  },
+  "horizon_tier": 2,
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!"
+}

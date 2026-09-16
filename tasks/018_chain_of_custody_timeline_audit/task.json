@@ -1,0 +1,100 @@
+{
+  "task_id": "018_chain_of_custody_timeline_audit",
+  "name": "law_firm_software_018_chain_of_custody_timeline_audit",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "audit"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's chain-of-custody timeline audit for this episode, batched under the episode batch code (ops_meta, meta_key='episode_state'; the episode row also carries the episode date and the custody_gap_days knob the gap rule is measured against). Apply the firm's custody standards in firm policy CUSTODY-01 exactly as the live policy row states them \u2014 every rule it lists, including the administrative-action exemption and the tolerance it takes from the episode row. The audit covers every ediscovery_collections row whose chain_of_custody array is non-empty; an empty array has nothing to audit and gets no row. Push one ops_reports row per audited collection (report='custody_timeline', batch_code) recording the collection's identity, how many custody entries it carries, the verdict on each policy rule, the largest adjacent gap in days, the span of the trail in days, an overall compliant/defective verdict, and the reason codes naming each violated rule. STAGE 2 \u2014 firm policy SEVERITY-01 requires a report that summarizes another to reuse the summarized rows' values rather than recompute them: from the timeline rows, push one ops_reports row (report='custody_defect_summary', batch_code) carrying how many collections were audited, how many are compliant, how many are defective, and the per-defect-type counts. STAGE 3 \u2014 rank the defective collections by the span of their custody trail and push one ops_reports row per rank (report='custody_duration_rank', batch_code) carrying the rank and the collection's identity and span. No other ops_reports rows for these reports and this batch may exist. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 173,
+  "par_steps": 115,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "custody_gap_days": {
+        "min": 100,
+        "max": 150
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "slip",
+      "mechanism": "Custody trails with shuffled timestamps: the preservation and collection entries' when values are transposed, so the array is non-chronological AND preservation lands after the earliest collection (planted by index in the seed's custody generator). Snapshot-confirmed: 8 collections."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "Custody trails whose final processing step drifted far past the collection step, leaving an adjacent gap far beyond the episode row's custody_gap_days tolerance (planted by index). Snapshot-confirmed: 7 collections; the gap verdict depends on the live episode knob, so the verifier recomputes it."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "Custody trails with no preservation entry at all (the trail starts at collection) \u2014 a preservation violation under CUSTODY-01 unless every action is an exempt administrative one. Snapshot-confirmed: 7 collections."
+    },
+    {
+      "category": "slip",
+      "mechanism": "Custody trails with an entry whose actor field was left empty (recorded under 'actor' in the bulk rows, 'who' in the hand-authored rows \u2014 both spellings count as the actor of record). Snapshot-confirmed: 7 collections."
+    }
+  ],
+  "success_criteria": {
+    "summary": "One custody_timeline row per non-empty-array collection (80 in the snapshot: 29 defective across four rule classes, 51 clean including the 3 hand-authored collections whose actor is recorded under 'who'), per-rule verdicts and reason codes exact against policy CUSTODY-01 and the episode knob, a defect summary derived by read-back from the timeline rows, and the defective set ranked by span.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one custody_timeline row per audited collection, one custody_defect_summary row, one custody_duration_rank row per defective collection"
+      },
+      {
+        "type": "dual_path",
+        "collection": "ediscovery_collections",
+        "expect": "per-collection verdicts recomputed in Python AND via SQL jsonb aggregation agree with each other and with the written rows"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "skipping any CUSTODY-01 rule (e.g. ignoring completeness or the gap tolerance), flagging empty-array collections, or misreading the who/actor spelling => FAIL"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "ISO 27037 NIST 800-86 chain of custody digital evidence timeline requirements",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "ISO/IEC 27037:2012 \u2014 Guidelines for identification, collection, acquisition and preservation of digital evidence (iso.org)",
+          "NIST SP 800-86, Guide to Integrating Forensic Techniques into Incident Response (nvlpubs.nist.gov)",
+          "ISO/IEC JTC 1/SC 27 \u2014 chain of custody record requirements (amnafzar.net)"
+        ]
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "chain of custody chronological order preservation before collection gap tolerance audit benchmark task",
+        "retrieved_at": "2026-09-10",
+        "top_results": [
+          "Digital Evidence Preservation: Considerations for Evidence Handlers (tsapps.nist.gov)",
+          "Digital Chain of Custody: What It Is and How to Keep It (truescreen.io)",
+          "Defensible Collection Practices Checklist (acedds.com)"
+        ]
+      }
+    ],
+    "differentiation_note": "The only task in the suite that audits a doubly-nested JSON array against a five-rule policy (chronology, preservation-before-collection with an administrative exemption, field completeness across two actor spellings, an episode-knob gap tolerance, span), with four planted defect classes distributed by index across ~80 hold-linked collections."
+  },
+  "horizon_tier": 2
+}

@@ -1,0 +1,99 @@
+{
+  "task_id": "011_matter_staffing_roster_reconciliation",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter 5: team_members length after append: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.5
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter 5: team_members length after append: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.7
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: matter 5: team_members length after append: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.7
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 129 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.1
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 6.6
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.7
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 143 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 1.1
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.7
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold_alt done in 108 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 3.8
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 6.2
+    }
+  },
+  "reset_seconds": 19.5,
+  "nonce": "EP-96FB5AD6",
+  "measured_gold_steps": 129,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

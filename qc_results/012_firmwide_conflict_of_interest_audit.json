@@ -1,0 +1,99 @@
+{
+  "task_id": "012_firmwide_conflict_of_interest_audit",
+  "runs": {
+    "noop": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: conflict_of_interest row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 5.6
+    },
+    "random": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: conflict_of_interest row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 3.0
+    },
+    "hardcode": {
+      "exit": 1,
+      "stdout_tail": [
+        "FAIL: conflict_of_interest row count: mismatch"
+      ],
+      "stderr_tail": [],
+      "seconds": 3.0
+    },
+    "gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 21 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.1
+    },
+    "verify_after_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 8.5
+    },
+    "verify_idempotent": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 5.4
+    },
+    "gold_second_run": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold done in 24 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 0.4
+    },
+    "verify_after_second_gold": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 5.0
+    },
+    "gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "gold_alt done in 11 API calls"
+      ],
+      "stderr_tail": [],
+      "seconds": 2.5
+    },
+    "verify_after_gold_alt": {
+      "exit": 0,
+      "stdout_tail": [
+        "PASS"
+      ],
+      "stderr_tail": [],
+      "seconds": 8.8
+    }
+  },
+  "reset_seconds": 21.5,
+  "nonce": "EP-AE9113BD",
+  "measured_gold_steps": 21,
+  "verdicts": {
+    "noop_fail": true,
+    "random_fail": true,
+    "hardcode_fail": true,
+    "gold_pass": true,
+    "idempotent_pass": true,
+    "gold_second_run_pass": true,
+    "gold_alt_pass": true,
+    "budget_fits": true
+  },
+  "pass": true
+}

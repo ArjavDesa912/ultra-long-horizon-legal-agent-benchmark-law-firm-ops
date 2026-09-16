@@ -1,0 +1,95 @@
+{
+  "task_id": "024_firmwide_referential_integrity_audit",
+  "name": "law_firm_software_024_firmwide_referential_integrity_audit",
+  "version": "2.0.0",
+  "difficulty": "hard",
+  "category": [
+    "aggregation",
+    "audit"
+  ],
+  "surface": "backend",
+  "instruction": "Run the firm's enabled referential-integrity controls, batched under the episode batch code (ops_meta). Mutate nothing. The firm's control registry (firm_controls) lists the referential controls and which of them are enabled; the integrity policy REF-INTEG-01 defines when a reference counts as a violation -- including which references are intentionally unreferenced scaffolding that is never a violation, and how employee-style fields resolve. Run exactly the enabled referential controls, each against every row of the collection it scopes, and count the rows that fail them. Push one ops_reports row per enabled referential control (report='ref_integrity_control_finding', batch_code) with {control_id, rule_key, scope_collection, violation_count}. STAGE 2 -- push one summary row (report='referential_integrity', batch_code) with {total_violations, by_rule (one entry per enabled control's rule key), clean (true iff total_violations is 0)}, reusing this batch's finding rows per firm policy SEVERITY-01. STAGE 3 -- per SEVERITY-01, push one severity row (report='referential_integrity_severity', batch_code) reusing the summary row's values: worst_rule, worst_rule_count, overall_severity (critical iff total_violations exceeds the episode row's severity_critical_count, else low). No other ops_reports rows for this batch under these report names may exist. Every collection this task doesn't write to must remain untouched.",
+  "app_slug": "law_firm_software",
+  "app_port": 3005,
+  "stackhouse_port": 9090,
+  "collection_prefix": "",
+  "verifier_email": "rl-admin@rl.local",
+  "verifier_password": "RLVerifier2025!",
+  "max_steps": 173,
+  "par_steps": 115,
+  "nonce": {
+    "collection": "ops_meta",
+    "field": "batch_code",
+    "extra_fields": {
+      "severity_critical_count": {
+        "min": 30,
+        "max": 80
+      }
+    }
+  },
+  "blast_radius": [
+    "ops_reports"
+  ],
+  "hazards": [
+    {
+      "category": "scope_boundary",
+      "mechanism": "CTL-REF-07 (grant_reports_award_id) sits in the registry DORMANT with 300 dangling bulk grant_reports behind it in the snapshot (planted: 300, snapshot-confirmed) -- reporting it, or folding its count into total_violations, is a plausible wrong audit that FAILs; only CTL-REF-01..06 are in scope."
+    },
+    {
+      "category": "mistake",
+      "mechanism": "REF-INTEG-01's placeholder exemption: references whose string starts with PLACEHOLDER- are intentionally unreferenced scaffolding and are never violations. The snapshot plants 6 PLACEHOLDER- deadlines, 4 PLACEHOLDER- tasks and 3 PLACEHOLDER- time_entries among the dangling rows (planted: 13 placeholder refs, snapshot-confirmed) -- counting them inflates deadlines_matter_id 8->14, tasks_matter_id 6->10 and time_entries_matter_id 7->10, plausible wrong counts that FAIL."
+    },
+    {
+      "category": "lapse",
+      "mechanism": "CTL-REF-06 resolves employee-style fields against staff_roster rows ACTIVE at the episode date, not merely present: 4 time_entries reference EMP-606, which is not on the roster at all (planted: 4, snapshot-confirmed; the departed EMP-006 carries zero entries so the active window is latent in this seed but still governs the check)."
+    }
+  ],
+  "success_criteria": {
+    "summary": "Exactly one finding row per ENABLED referential control (CTL-REF-01..06) with its by-rule violation count matching both a raw-row pass and a SQL aggregate; the dormant CTL-REF-07 absent; PLACEHOLDER- references exempt (counting them FAILs); one summary row whose by_rule carries exactly the enabled rule keys; one severity row per SEVERITY-01 derived from the summary row's own values and the episode row's severity_critical_count.",
+    "checks": [
+      {
+        "type": "derived_rows",
+        "collection": "ops_reports",
+        "expect": "one finding row per enabled referential control, one summary row, one severity row; dormant control absent"
+      },
+      {
+        "type": "dual_path",
+        "collection": "deadlines/tasks/time_entries/invoices/trust_transactions",
+        "expect": "every by-rule count agrees between the raw-row pass and SQL, and both agree with the pushed rows"
+      },
+      {
+        "type": "hazard_coverage",
+        "expect": "counting PLACEHOLDER- references, or reporting the dormant CTL-REF-07, produces wrong counts and FAILs"
+      },
+      {
+        "type": "canary_hash",
+        "collections": "all seeded collections outside blast_radius (governance collections always canaried)"
+      }
+    ]
+  },
+  "uniqueness_report": {
+    "domain_searches": [
+      {
+        "query": "Metaplane data quality control registry tests observability",
+        "top_results": [
+          "Data Observability: Data Regression Tests (metaplane.dev)",
+          "Using dbt Tests with Metaplane (metaplane.dev)",
+          "Data Quality Monitoring and Anomaly Detection | Metaplane by Datadog"
+        ],
+        "retrieved_at": "2026-09-10"
+      }
+    ],
+    "uniqueness_searches": [
+      {
+        "query": "cross collection foreign key resolution audit placeholder exemption benchmark task legal case management",
+        "top_results": [
+          "Case Management System Data Integrity Audits (intapp.com)",
+          "Orphaned Record Detection in Legal Databases (clio.com)",
+          "Cross-Table Reference Validation Tools (dama.org)"
+        ]
+      }
+    ],
+    "differentiation_note": "v2 inverts the v1 design: instead of the instruction listing the six rules and asserting a clean sweep, the registry now carries 7 referential controls (one dormant, sitting on 300 dangling bulk rows) and the integrity policy REF-INTEG-01 defines the placeholder exemption and the roster-active resolution -- the agent discovers the scope, the exemption, and the employee rule from data, and the seed plants real dangling rows (8 deadlines, 6 tasks, 7 time_entries, 5 invoices, 4 trust transactions) so the audit is no longer trivially clean."
+  },
+  "horizon_tier": 2
+}
